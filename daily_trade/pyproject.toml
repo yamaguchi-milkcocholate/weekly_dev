@@ -5,8 +5,17 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12.2"
 dependencies = [
+    "fastapi>=0.119.0",
     "google-cloud-firestore>=2.21.0",
+    "uvicorn>=0.37.0",
+    "email-validator>=2.0.0",
 ]
+
+[tool.setuptools]
+packages = ["daily_trade"]
+
+[tool.setuptools.package-dir]
+"daily_trade" = "src/daily_trade"
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
