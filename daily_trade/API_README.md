@@ -130,6 +130,8 @@ daily_trade/
 │   └── firestore.py         # Firestore使用例（参考）
 ├── run_server.py            # サーバー起動スクリプト
 ├── pyproject.toml           # プロジェクト設定
+├── Dockerfile               # Dockerコンテナ設定
+├── .dockerignore            # Docker除外ファイル設定
 └── API_README.md            # このファイル
 ```
 
@@ -165,6 +167,26 @@ ruff format src/
 pytest
 ```
 
+## 🚀 デプロイメント
+
+### Cloud Run へのデプロイ
+
+このアプリケーションは Google Cloud Run にデプロイ可能です。
+
+#### デプロイされるファイル
+
+- `Dockerfile` - マルチステージビルドによる最適化されたコンテナイメージ
+- `.dockerignore` - ビルドサイズ最適化のための除外ファイル設定
+- `cloud-run-service.yaml` - Cloud Run サービス設定
+- `deploy.sh` - 自動デプロイスクリプト
+
+#### Cloud Run の特徴
+
+- **自動スケーリング**: リクエスト数に応じて自動でインスタンス数を調整
+- **従量課金**: 使用した分だけ課金
+- **ヘルスチェック**: `/health` エンドポイントでの自動監視
+- **HTTPS 対応**: 自動で SSL 証明書を設定
+
 ## 📚 参考資料
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
@@ -181,7 +203,7 @@ pytest
 4. **バリデーション**: より複雑なデータ検証ルール
 5. **テスト**: pytest を使用した単体テスト・統合テスト
 6. **ログ**: 構造化ログとモニタリング
-7. **デプロイ**: Docker コンテナ化と本番環境デプロイ
+7. **CI/CD**: GitHub Actions による自動デプロイ
 
 ## 🤝 コントリビューション
 
