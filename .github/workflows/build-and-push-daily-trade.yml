@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/daily_trade
     tags:
       - "v*"
   pull_request:
@@ -85,8 +84,11 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./daily_trade
           file: ./daily_trade/Dockerfile
+          build-args: |
+            SRC_PATH=./src
+            PROJECT_FILES_PATH=.
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

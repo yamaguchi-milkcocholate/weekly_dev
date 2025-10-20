@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SRC_PATH: ./src
+        PROJECT_FILES_PATH: .
     container_name: daily-trade-api
     ports:
       - "8000:8000"

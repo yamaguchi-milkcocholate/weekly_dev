@@ -1,6 +1,10 @@
 # Python 3.12 slim ベースイメージを使用
 FROM python:3.12-slim
 
+# ビルド時引数を定義（デフォルト値はローカル開発用）
+ARG SRC_PATH=./src
+ARG PROJECT_FILES_PATH=.
+
 # 非rootユーザーを作成
 RUN useradd --create-home --shell /bin/bash app
 
@@ -18,13 +22,13 @@ RUN apt-get update && apt-get install -y \
 RUN pip install uv
 
 # pyproject.tomlとuv.lockをコピー
-COPY pyproject.toml uv.lock ./
+COPY ${PROJECT_FILES_PATH}/pyproject.toml ${PROJECT_FILES_PATH}/uv.lock ./
 
 # 依存関係をインストール（本番環境用）
 RUN uv sync --frozen --no-dev
 
 # アプリケーションコードをコピー
-COPY src/ ./src/
+COPY ${SRC_PATH}/ ./src/
 
 RUN uv pip install .
 
