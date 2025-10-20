@@ -10,6 +10,26 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "development"
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      force_scan:
+        description: "Force security scan regardless of branch"
+        required: false
+        default: false
+        type: boolean
+      custom_tag:
+        description: "Custom tag for the image (optional)"
+        required: false
+        type: string
 
 env:
   PROJECT_ID: weekly-dev-20251013
