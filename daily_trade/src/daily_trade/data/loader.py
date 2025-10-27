@@ -7,10 +7,9 @@ with retry mechanisms and data validation.
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import pandas as pd
-import yfinance as yf
 from tenacity import (
     before_sleep_log,
     retry,
@@ -18,8 +17,9 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+import yfinance as yf
 
-from ..utils.logger import get_logger
+from daily_trade.utils.logger import get_logger
 
 
 @dataclass
@@ -36,8 +36,7 @@ class LoadConfig:
 
 
 class DataLoader:
-    """
-    DataLoader for fetching OHLCV data using yfinance API.
+    """DataLoader for fetching OHLCV data using yfinance API.
 
     Features:
     - Fetch daily OHLC data for specified symbols
@@ -48,8 +47,7 @@ class DataLoader:
     """
 
     def __init__(self, config: LoadConfig):
-        """
-        Initialize DataLoader.
+        """Initialize DataLoader.
 
         Args:
             config: LoadConfig instance with data loading parameters
@@ -64,9 +62,8 @@ class DataLoader:
             self.save_dir = Path("./data/ohlcv/")
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
-    def load_ohlcv(self, symbols: List[str]) -> pd.DataFrame:
-        """
-        Load OHLCV data for specified symbols.
+    def load_ohlcv(self, symbols: list[str]) -> pd.DataFrame:
+        """Load OHLCV data for specified symbols.
 
         Args:
             symbols: List of stock symbols (e.g., ["7203.T", "6758.T"])
@@ -93,7 +90,7 @@ class DataLoader:
                     self.logger.warning(f"No data retrieved for {symbol}")
             except Exception as e:
                 failed_symbols.append(symbol)
-                self.logger.error(f"Failed to load data for {symbol}: {str(e)}")
+                self.logger.error(f"Failed to load data for {symbol}: {e!s}")
 
         if not all_frames:
             raise ValueError(f"No data could be loaded for any symbols: {symbols}")
@@ -112,8 +109,7 @@ class DataLoader:
         return combined_df
 
     def _fetch_symbol_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        """
-        Fetch data for a single symbol with retry mechanism using tenacity.
+        """Fetch data for a single symbol with retry mechanism using tenacity.
 
         Args:
             symbol: Stock symbol
@@ -152,12 +148,11 @@ class DataLoader:
         try:
             return _fetch_with_retry()
         except Exception as e:
-            self.logger.error(f"All retry attempts failed for {symbol}: {str(e)}")
+            self.logger.error(f"All retry attempts failed for {symbol}: {e!s}")
             return None
 
     def _clean_data(self, df: pd.DataFrame, symbol: str) -> pd.DataFrame:
-        """
-        Clean and standardize the raw yfinance data.
+        """Clean and standardize the raw yfinance data.
 
         Args:
             df: Raw yfinance DataFrame
@@ -206,8 +201,7 @@ class DataLoader:
         return df
 
     def _validate_data(self, df: pd.DataFrame, symbol: str) -> None:
-        """
-        Validate the cleaned data and log warnings for issues.
+        """Validate the cleaned data and log warnings for issues.
 
         Args:
             df: Cleaned DataFrame
@@ -246,8 +240,7 @@ class DataLoader:
             self.logger.warning(f"Found {duplicate_count} duplicate timestamps for {symbol}")
 
     def save_to_parquet(self, df: pd.DataFrame, filename: Optional[str] = None) -> str:
-        """
-        Save DataFrame to Parquet file.
+        """Save DataFrame to Parquet file.
 
         Args:
             df: DataFrame to save
@@ -267,12 +260,11 @@ class DataLoader:
             self.logger.info(f"Data saved to {filepath} ({len(df)} records)")
             return str(filepath)
         except Exception as e:
-            self.logger.error(f"Failed to save data to {filepath}: {str(e)}")
+            self.logger.error(f"Failed to save data to {filepath}: {e!s}")
             raise
 
     def load_from_parquet(self, filepath: Union[str, Path]) -> pd.DataFrame:
-        """
-        Load DataFrame from Parquet file.
+        """Load DataFrame from Parquet file.
 
         Args:
             filepath: Path to Parquet file
@@ -285,5 +277,5 @@ class DataLoader:
             self.logger.info(f"Loaded data from {filepath} ({len(df)} records)")
             return df
         except Exception as e:
-            self.logger.error(f"Failed to load data from {filepath}: {str(e)}")
+            self.logger.error(f"Failed to load data from {filepath}: {e!s}")
             raise
