@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-build_dataset.py - データセット構築CLI
+"""build_dataset.py - データセット構築CLI
 
 データ取得から特徴量生成、ターゲット作成までの全パイプラインを実行し、
 機械学習用データセットを構築します。
@@ -11,9 +10,9 @@ Usage:
 """
 
 import argparse
-import sys
 from datetime import datetime
 from pathlib import Path
+import sys
 from typing import List, Optional
 
 import yaml
@@ -27,13 +26,11 @@ from daily_trade.utils.logger import AppLogger
 
 def load_config_from_yaml(config_path: str) -> dict:
     """YAML設定ファイルを読み込み"""
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def create_output_path(
-    base_dir: str = "./data", filename: str = "daily_ohlcv_features.parquet"
-) -> Path:
+def create_output_path(base_dir: str = "./data", filename: str = "daily_ohlcv_features.parquet") -> Path:
     """出力パスを作成"""
     output_dir = Path(base_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -50,8 +47,7 @@ def build_dataset(
     winsorize_pct: float = 0.01,
     min_trading_days: int = 100,
 ) -> str:
-    """
-    データセット構築メイン処理
+    """データセット構築メイン処理
 
     Args:
         symbols: 銘柄コードリスト
@@ -102,9 +98,7 @@ def build_dataset(
         feature_config = FeatureConfig()
         feature_builder = FeatureBuilder(feature_config)
         feature_data = feature_builder.build(clean_data)
-        logger.info(
-            f"Feature data: {feature_data.shape}, columns: {len(feature_data.columns)}"
-        )
+        logger.info(f"Feature data: {feature_data.shape}, columns: {len(feature_data.columns)}")
 
         # 4. ターゲット生成
         logger.info("4. ターゲット生成開始...")
@@ -122,9 +116,7 @@ def build_dataset(
         logger.info("6. データセット統計:")
         logger.info(f"  総レコード数: {len(final_data):,}")
         logger.info(f"  銘柄数: {final_data['symbol'].nunique()}")
-        logger.info(
-            f"  期間: {final_data['timestamp'].min()} ～ {final_data['timestamp'].max()}"
-        )
+        logger.info(f"  期間: {final_data['timestamp'].min()} ～ {final_data['timestamp'].max()}")
         logger.info(
             f"  特徴量数: {len([col for col in final_data.columns if col not in ['symbol', 'timestamp', 'next_ret', 'y_up']])}"
         )
@@ -132,9 +124,7 @@ def build_dataset(
 
         # 銘柄別統計
         symbol_stats = (
-            final_data.groupby("symbol")
-            .agg({"y_up": ["count", "mean"], "next_ret": ["mean", "std"]})
-            .round(3)
+            final_data.groupby("symbol").agg({"y_up": ["count", "mean"], "next_ret": ["mean", "std"]}).round(3)
         )
         logger.info("7. 銘柄別統計:")
         for symbol in symbol_stats.index:
@@ -142,9 +132,7 @@ def build_dataset(
             up_rate = symbol_stats.loc[symbol, ("y_up", "mean")]
             mean_ret = symbol_stats.loc[symbol, ("next_ret", "mean")]
             std_ret = symbol_stats.loc[symbol, ("next_ret", "std")]
-            logger.info(
-                f"  {symbol}: {count}日, 上昇率={up_rate:.1%}, リターン={mean_ret:.3f}±{std_ret:.3f}"
-            )
+            logger.info(f"  {symbol}: {count}日, 上昇率={up_rate:.1%}, リターン={mean_ret:.3f}±{std_ret:.3f}")
 
         logger.info("=== データセット構築完了 ===")
         return str(output_path)
@@ -163,7 +151,7 @@ def main():
 Examples:
   # YAML設定ファイルから実行
   python -m daily_trade.scripts.build_dataset --config config.yaml
-  
+
   # CLI引数で直接指定
   python -m daily_trade.scripts.build_dataset \\
     --symbols AAPL MSFT GOOGL \\
@@ -214,9 +202,7 @@ Examples:
         help="Winsorize閾値 (デフォルト: 0.01 = 1%%)",
     )
 
-    parser.add_argument(
-        "--min-days", type=int, default=100, help="最小取引日数 (デフォルト: 100)"
-    )
+    parser.add_argument("--min-days", type=int, default=100, help="最小取引日数 (デフォルト: 100)")
 
     # 出力設定
     parser.add_argument(

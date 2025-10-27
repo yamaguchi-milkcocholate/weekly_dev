@@ -104,9 +104,7 @@ class FeatureBuilder:
             "timestamp",
             "symbol",
         ]
-        missing_columns = [
-            col for col in required_columns if col not in df_features.columns
-        ]
+        missing_columns = [col for col in required_columns if col not in df_features.columns]
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
 
@@ -118,33 +116,25 @@ class FeatureBuilder:
         feature_frames = []
         for symbol in df_features["symbol"].unique():
             symbol_data = df_features[df_features["symbol"] == symbol].copy()
-            symbol_data_with_features = self._build_features_for_symbol(
-                symbol_data, price_column
-            )
+            symbol_data_with_features = self._build_features_for_symbol(symbol_data, price_column)
             feature_frames.append(symbol_data_with_features)
 
         # Combine all symbols
         df_combined = pd.concat(feature_frames, ignore_index=True)
 
         # Sort by timestamp and symbol
-        df_combined = df_combined.sort_values(["timestamp", "symbol"]).reset_index(
-            drop=True
-        )
+        df_combined = df_combined.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
 
         # Count generated features
         original_columns = set(df.columns)
         new_columns = set(df_combined.columns) - original_columns
 
-        self.logger.info(
-            f"Feature building completed: {len(new_columns)} new features generated"
-        )
+        self.logger.info(f"Feature building completed: {len(new_columns)} new features generated")
         self.logger.info(f"New features: {sorted(list(new_columns))}")
 
         return df_combined
 
-    def _build_features_for_symbol(
-        self, df: pd.DataFrame, price_column: str
-    ) -> pd.DataFrame:
+    def _build_features_for_symbol(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
         """Build features for a single symbol."""
         # Sort by timestamp to ensure proper ordering
         df = df.sort_values("timestamp").reset_index(drop=True)
@@ -175,31 +165,21 @@ class FeatureBuilder:
 
         # Simple Moving Averages
         for window in self.config.sma_windows:
-            df[f"sma_{window}"] = ta.trend.SMAIndicator(
-                close=price_series, window=window
-            ).sma_indicator()
+            df[f"sma_{window}"] = ta.trend.SMAIndicator(close=price_series, window=window).sma_indicator()
 
         # Exponential Moving Averages
         for window in self.config.ema_windows:
-            df[f"ema_{window}"] = ta.trend.EMAIndicator(
-                close=price_series, window=window
-            ).ema_indicator()
+            df[f"ema_{window}"] = ta.trend.EMAIndicator(close=price_series, window=window).ema_indicator()
 
         # Price slope (linear regression slope)
-        df[f"slope_{self.config.slope_window}"] = self._calculate_slope(
-            price_series, self.config.slope_window
-        )
+        df[f"slope_{self.config.slope_window}"] = self._calculate_slope(price_series, self.config.slope_window)
 
         # Slope as percentage
-        df[f"slope_pct_{self.config.slope_window}"] = (
-            df[f"slope_{self.config.slope_window}"] / price_series
-        )
+        df[f"slope_pct_{self.config.slope_window}"] = df[f"slope_{self.config.slope_window}"] / price_series
 
         return df
 
-    def _add_volatility_features(
-        self, df: pd.DataFrame, price_column: str
-    ) -> pd.DataFrame:
+    def _add_volatility_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
         """Add volatility-based features."""
         # Average True Range
         atr_indicator = ta.volatility.AverageTrueRange(
@@ -211,15 +191,11 @@ class FeatureBuilder:
         df[f"atr_{self.config.atr_window}"] = atr_indicator.average_true_range()
 
         # ATR as percentage of price
-        df[f"atr_pct_{self.config.atr_window}"] = (
-            df[f"atr_{self.config.atr_window}"] / df["close"]
-        )
+        df[f"atr_pct_{self.config.atr_window}"] = df[f"atr_{self.config.atr_window}"] / df["close"]
 
         # Rolling standard deviation of returns
         returns = df[price_column].pct_change()
-        df[f"stdev_{self.config.stdev_window}"] = returns.rolling(
-            window=self.config.stdev_window, min_periods=1
-        ).std()
+        df[f"stdev_{self.config.stdev_window}"] = returns.rolling(window=self.config.stdev_window, min_periods=1).std()
 
         # Bollinger Bands
         bollinger = ta.volatility.BollingerBands(
@@ -239,19 +215,13 @@ class FeatureBuilder:
         """Add volume-based features."""
         # Volume ratio (current volume / average volume)
         df[f"vol_ratio_{self.config.volume_ratio_window}"] = (
-            df["volume"]
-            / df["volume"]
-            .rolling(window=self.config.volume_ratio_window, min_periods=1)
-            .mean()
+            df["volume"] / df["volume"].rolling(window=self.config.volume_ratio_window, min_periods=1).mean()
         )
 
         # Turnover ratio (turnover / average turnover)
         turnover = df[price_column] * df["volume"]
         df[f"tov_ratio_{self.config.volume_ratio_window}"] = (
-            turnover
-            / turnover.rolling(
-                window=self.config.volume_ratio_window, min_periods=1
-            ).mean()
+            turnover / turnover.rolling(window=self.config.volume_ratio_window, min_periods=1).mean()
         )
 
         # Volume-Price Trend (VPT)
@@ -260,15 +230,11 @@ class FeatureBuilder:
         ).volume_price_trend()
 
         # On-Balance Volume (OBV)
-        df["obv"] = ta.volume.OnBalanceVolumeIndicator(
-            close=df[price_column], volume=df["volume"]
-        ).on_balance_volume()
+        df["obv"] = ta.volume.OnBalanceVolumeIndicator(close=df[price_column], volume=df["volume"]).on_balance_volume()
 
         return df
 
-    def _add_momentum_features(
-        self, df: pd.DataFrame, price_column: str
-    ) -> pd.DataFrame:
+    def _add_momentum_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
         """Add momentum-based features."""
         # Price returns for different periods
         for window in self.config.return_windows:
@@ -292,25 +258,19 @@ class FeatureBuilder:
         df["macd_hist"] = macd_indicator.macd_diff()
 
         # Stochastic Oscillator
-        stoch_indicator = ta.momentum.StochasticOscillator(
-            high=df["high"], low=df["low"], close=df["close"]
-        )
+        stoch_indicator = ta.momentum.StochasticOscillator(high=df["high"], low=df["low"], close=df["close"])
         df["stoch_k"] = stoch_indicator.stoch()
         df["stoch_d"] = stoch_indicator.stoch_signal()
 
         return df
 
-    def _add_technical_features(
-        self, df: pd.DataFrame, price_column: str
-    ) -> pd.DataFrame:
+    def _add_technical_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
         """Add additional technical indicators."""
         # Check if we have enough data for indicators
         min_periods_required = 14  # Most indicators need at least 14 periods
 
         if len(df) < min_periods_required:
-            self.logger.warning(
-                f"Insufficient data ({len(df)} periods) for some technical indicators. Skipping..."
-            )
+            self.logger.warning(f"Insufficient data ({len(df)} periods) for some technical indicators. Skipping...")
             # Add placeholder columns with NaN
             df["williams_r"] = np.nan
             df["cci"] = np.nan
@@ -330,18 +290,14 @@ class FeatureBuilder:
 
         try:
             # Commodity Channel Index (CCI)
-            df["cci"] = ta.trend.CCIIndicator(
-                high=df["high"], low=df["low"], close=df["close"]
-            ).cci()
+            df["cci"] = ta.trend.CCIIndicator(high=df["high"], low=df["low"], close=df["close"]).cci()
         except Exception as e:
             self.logger.warning(f"Failed to calculate CCI: {e}")
             df["cci"] = np.nan
 
         try:
             # Average Directional Index (ADX)
-            adx_indicator = ta.trend.ADXIndicator(
-                high=df["high"], low=df["low"], close=df["close"]
-            )
+            adx_indicator = ta.trend.ADXIndicator(high=df["high"], low=df["low"], close=df["close"])
             df["adx"] = adx_indicator.adx()
             df["adx_pos"] = adx_indicator.adx_pos()
             df["adx_neg"] = adx_indicator.adx_neg()
@@ -378,9 +334,7 @@ class FeatureBuilder:
             # Use simple difference approximation for speed
             return (x.iloc[-1] - x.iloc[0]) / len(x)
 
-        return price_series.rolling(window=window, min_periods=2).apply(
-            rolling_slope, raw=False
-        )
+        return price_series.rolling(window=window, min_periods=2).apply(rolling_slope, raw=False)
 
     def get_feature_list(self) -> List[str]:
         """Get list of all features that will be generated."""

@@ -76,9 +76,7 @@ class DirectionModel:
         Returns:
             学習済みモデル
         """
-        self.logger.info(
-            f"DirectionModel学習開始: X.shape={X.shape}, y分布={y.value_counts().to_dict()}"
-        )
+        self.logger.info(f"DirectionModel学習開始: X.shape={X.shape}, y分布={y.value_counts().to_dict()}")
 
         # 特徴量名保存
         self.feature_names = list(X.columns)
@@ -122,9 +120,7 @@ class DirectionModel:
         # 特徴量重要度計算
         self._calculate_feature_importance()
 
-        self.logger.info(
-            f"DirectionModel学習完了: best_iteration={self.model.best_iteration_}"
-        )
+        self.logger.info(f"DirectionModel学習完了: best_iteration={self.model.best_iteration_}")
 
         return self
 
@@ -139,9 +135,7 @@ class DirectionModel:
             各クラスの予測確率 (N, 2)
         """
         if self.model is None:
-            raise ValueError(
-                "モデルが学習されていません。先にfit()を実行してください。"
-            )
+            raise ValueError("モデルが学習されていません。先にfit()を実行してください。")
 
         # 特徴量順序確認
         if list(X.columns) != self.feature_names:
@@ -174,9 +168,7 @@ class DirectionModel:
             評価指標辞書
         """
         if self.model is None:
-            raise ValueError(
-                "モデルが学習されていません。先にfit()を実行してください。"
-            )
+            raise ValueError("モデルが学習されていません。先にfit()を実行してください。")
 
         # 予測実行
         y_pred = self.predict(X)
@@ -186,19 +178,13 @@ class DirectionModel:
         metrics = {
             "auc": roc_auc_score(y, y_proba),
             "accuracy": accuracy_score(y, y_pred),
-            "precision": precision_score(
-                y, y_pred, average=self.config.average, zero_division=0
-            ),
-            "recall": recall_score(
-                y, y_pred, average=self.config.average, zero_division=0
-            ),
+            "precision": precision_score(y, y_pred, average=self.config.average, zero_division=0),
+            "recall": recall_score(y, y_pred, average=self.config.average, zero_division=0),
             "n_samples": len(y),
             "pos_ratio": y.mean(),
         }
 
-        self.logger.info(
-            f"評価結果: AUC={metrics['auc']:.3f}, Accuracy={metrics['accuracy']:.3f}"
-        )
+        self.logger.info(f"評価結果: AUC={metrics['auc']:.3f}, Accuracy={metrics['accuracy']:.3f}")
 
         return metrics
 
@@ -221,9 +207,7 @@ class DirectionModel:
         scores = {"auc": [], "accuracy": [], "precision": [], "recall": []}
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-            self.logger.info(
-                f"Fold {fold + 1}/{self.config.cv_splits}: train={len(train_idx)}, val={len(val_idx)}"
-            )
+            self.logger.info(f"Fold {fold + 1}/{self.config.cv_splits}: train={len(train_idx)}, val={len(val_idx)}")
 
             # データ分割
             X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
@@ -264,22 +248,15 @@ class DirectionModel:
             fold_scores = {
                 "auc": roc_auc_score(y_val, y_proba),
                 "accuracy": accuracy_score(y_val, y_pred),
-                "precision": precision_score(
-                    y_val, y_pred, average=self.config.average, zero_division=0
-                ),
-                "recall": recall_score(
-                    y_val, y_pred, average=self.config.average, zero_division=0
-                ),
+                "precision": precision_score(y_val, y_pred, average=self.config.average, zero_division=0),
+                "recall": recall_score(y_val, y_pred, average=self.config.average, zero_division=0),
             }
 
             # スコア記録
             for metric, score in fold_scores.items():
                 scores[metric].append(score)
 
-            self.logger.info(
-                f"Fold {fold + 1} スコア: "
-                + ", ".join([f"{k}={v:.3f}" for k, v in fold_scores.items()])
-            )
+            self.logger.info(f"Fold {fold + 1} スコア: " + ", ".join([f"{k}={v:.3f}" for k, v in fold_scores.items()]))
 
         # 平均スコア計算
         mean_scores = {metric: np.mean(values) for metric, values in scores.items()}
@@ -287,9 +264,7 @@ class DirectionModel:
 
         self.logger.info("交差検証完了:")
         for metric in scores.keys():
-            self.logger.info(
-                f"  {metric}: {mean_scores[metric]:.3f} ± {std_scores[metric]:.3f}"
-            )
+            self.logger.info(f"  {metric}: {mean_scores[metric]:.3f} ± {std_scores[metric]:.3f}")
 
         # スコア保存
         self.cv_scores_ = scores
@@ -307,14 +282,10 @@ class DirectionModel:
             特徴量重要度辞書（降順）
         """
         if self.feature_importances_ is None:
-            raise ValueError(
-                "特徴量重要度が計算されていません。先にfit()を実行してください。"
-            )
+            raise ValueError("特徴量重要度が計算されていません。先にfit()を実行してください。")
 
         # 上位N個取得
-        sorted_importance = sorted(
-            self.feature_importances_.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_importance = sorted(self.feature_importances_.items(), key=lambda x: x[1], reverse=True)
 
         return dict(sorted_importance[:top_n])
 
@@ -326,9 +297,7 @@ class DirectionModel:
             file_path: 保存先パス
         """
         if self.model is None:
-            raise ValueError(
-                "保存するモデルがありません。先にfit()を実行してください。"
-            )
+            raise ValueError("保存するモデルがありません。先にfit()を実行してください。")
 
         save_data = {
             "model": self.model,
@@ -371,9 +340,7 @@ class DirectionModel:
         # 欠損値チェック（警告のみ）
         null_features = X.isnull().sum()
         if null_features.any():
-            self.logger.warning(
-                f"特徴量に欠損値があります: {null_features[null_features > 0].to_dict()}"
-            )
+            self.logger.warning(f"特徴量に欠損値があります: {null_features[null_features > 0].to_dict()}")
 
         if y.isnull().any():
             raise ValueError("ターゲットに欠損値があります")

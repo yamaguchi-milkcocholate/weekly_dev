@@ -3,9 +3,7 @@ from pathlib import Path
 
 from google.cloud import firestore
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(
-    Path(__file__).resolve().parent.parent / "sa-key.json"
-)
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(Path(__file__).resolve().parent.parent / "sa-key.json")
 
 
 def read_data():

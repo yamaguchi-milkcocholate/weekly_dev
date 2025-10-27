@@ -102,13 +102,9 @@ class DataLoader:
         combined_df = pd.concat(all_frames, ignore_index=True)
 
         # Sort by timestamp and symbol
-        combined_df = combined_df.sort_values(["timestamp", "symbol"]).reset_index(
-            drop=True
-        )
+        combined_df = combined_df.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
 
-        self.logger.info(
-            f"Combined data: {len(combined_df)} total records from {len(all_frames)} symbols"
-        )
+        self.logger.info(f"Combined data: {len(combined_df)} total records from {len(all_frames)} symbols")
 
         if failed_symbols:
             self.logger.warning(f"Failed symbols: {failed_symbols}")
@@ -226,44 +222,28 @@ class DataLoader:
             if col in df.columns:
                 negative_count = (df[col] < 0).sum()
                 if negative_count > 0:
-                    self.logger.warning(
-                        f"Found {negative_count} negative {col} values for {symbol}"
-                    )
+                    self.logger.warning(f"Found {negative_count} negative {col} values for {symbol}")
 
         # Check for zero volume
         if "volume" in df.columns:
             zero_volume_count = (df["volume"] == 0).sum()
             if zero_volume_count > 0:
-                self.logger.warning(
-                    f"Found {zero_volume_count} zero volume days for {symbol}"
-                )
+                self.logger.warning(f"Found {zero_volume_count} zero volume days for {symbol}")
 
         # Check for invalid OHLC relationships
         if all(col in df.columns for col in ["open", "high", "low", "close"]):
-            invalid_high = (
-                (df["high"] < df[["open", "close"]].max(axis=1))
-                | (df["high"] < df["low"])
-            ).sum()
-            invalid_low = (
-                (df["low"] > df[["open", "close"]].min(axis=1))
-                | (df["low"] > df["high"])
-            ).sum()
+            invalid_high = ((df["high"] < df[["open", "close"]].max(axis=1)) | (df["high"] < df["low"])).sum()
+            invalid_low = ((df["low"] > df[["open", "close"]].min(axis=1)) | (df["low"] > df["high"])).sum()
 
             if invalid_high > 0:
-                self.logger.warning(
-                    f"Found {invalid_high} invalid high prices for {symbol}"
-                )
+                self.logger.warning(f"Found {invalid_high} invalid high prices for {symbol}")
             if invalid_low > 0:
-                self.logger.warning(
-                    f"Found {invalid_low} invalid low prices for {symbol}"
-                )
+                self.logger.warning(f"Found {invalid_low} invalid low prices for {symbol}")
 
         # Check for duplicate timestamps
         duplicate_count = df["timestamp"].duplicated().sum()
         if duplicate_count > 0:
-            self.logger.warning(
-                f"Found {duplicate_count} duplicate timestamps for {symbol}"
-            )
+            self.logger.warning(f"Found {duplicate_count} duplicate timestamps for {symbol}")
 
     def save_to_parquet(self, df: pd.DataFrame, filename: Optional[str] = None) -> str:
         """

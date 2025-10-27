@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-train_model.py - モデル学習CLI
+"""train_model.py - モデル学習CLI
 
 特徴量データセットを読み込み、方向予測モデルの学習・評価・保存を実行します。
 
@@ -11,8 +10,8 @@ Usage:
 
 import argparse
 import json
-import sys
 from pathlib import Path
+import sys
 from typing import Dict, Optional
 
 import pandas as pd
@@ -24,7 +23,7 @@ from daily_trade.utils.logger import AppLogger
 
 def load_config_from_yaml(config_path: str) -> dict:
     """YAML設定ファイルを読み込み"""
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -48,11 +47,7 @@ def prepare_model_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     logger = AppLogger()
 
     # 特徴量カラム（symbol, timestamp, target以外）
-    feature_cols = [
-        col
-        for col in df.columns
-        if col not in ["symbol", "timestamp", "next_ret", "y_up"]
-    ]
+    feature_cols = [col for col in df.columns if col not in ["symbol", "timestamp", "next_ret", "y_up"]]
 
     X = df[feature_cols].copy()
     y = df["y_up"].copy()
@@ -82,12 +77,11 @@ def save_evaluation_report(
     def convert_numpy_types(obj):
         if hasattr(obj, "item"):
             return obj.item()
-        elif isinstance(obj, dict):
+        if isinstance(obj, dict):
             return {k: convert_numpy_types(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
+        if isinstance(obj, list):
             return [convert_numpy_types(item) for item in obj]
-        else:
-            return obj
+        return obj
 
     report = {
         "evaluation_metrics": convert_numpy_types(metrics),
@@ -122,8 +116,7 @@ def train_model(
     cv_splits: int = 3,
     save_report: bool = True,
 ) -> str:
-    """
-    モデル学習メイン処理
+    """モデル学習メイン処理
 
     Args:
         input_path: 入力データセットパス
@@ -180,14 +173,10 @@ def train_model(
         logger.info("=== 学習結果サマリー ===")
         logger.info(f"AUC: {metrics['auc']:.3f}")
         logger.info(f"Accuracy: {metrics['accuracy']:.3f}")
-        logger.info(
-            f"CV AUC: {pd.Series(cv_scores['auc']).mean():.3f} ± {pd.Series(cv_scores['auc']).std():.3f}"
-        )
+        logger.info(f"CV AUC: {pd.Series(cv_scores['auc']).mean():.3f} ± {pd.Series(cv_scores['auc']).std():.3f}")
 
         logger.info("主要特徴量 (Top 10):")
-        for i, (feature, importance) in enumerate(
-            list(feature_importance.items())[:10], 1
-        ):
+        for i, (feature, importance) in enumerate(list(feature_importance.items())[:10], 1):
             logger.info(f"  {i:2d}. {feature}: {importance:.1f}")
 
         logger.info("=== モデル学習完了 ===")
@@ -225,16 +214,12 @@ Examples:
     parser.add_argument("--config", "-c", type=str, help="YAML設定ファイルパス")
 
     # 入出力設定
-    parser.add_argument(
-        "--input", "-i", type=str, help="入力データセットパス (.parquet)"
-    )
+    parser.add_argument("--input", "-i", type=str, help="入力データセットパス (.parquet)")
 
     parser.add_argument("--output", "-o", type=str, help="出力モデルパス (.pkl)")
 
     # モデル設定
-    parser.add_argument(
-        "--cv-splits", type=int, default=3, help="交差検証分割数 (デフォルト: 3)"
-    )
+    parser.add_argument("--cv-splits", type=int, default=3, help="交差検証分割数 (デフォルト: 3)")
 
     parser.add_argument(
         "--num-leaves",
@@ -258,9 +243,7 @@ Examples:
     )
 
     # 出力設定
-    parser.add_argument(
-        "--no-report", action="store_true", help="評価レポート出力を無効化"
-    )
+    parser.add_argument("--no-report", action="store_true", help="評価レポート出力を無効化")
 
     parser.add_argument("--verbose", "-v", action="store_true", help="詳細ログ出力")
 

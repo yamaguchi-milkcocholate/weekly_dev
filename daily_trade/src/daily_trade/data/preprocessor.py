@@ -154,24 +154,18 @@ class Preprocessor:
                 rolling_median = original_values.rolling(
                     window=self.config.outlier_detection_window, min_periods=10
                 ).median()
-                rolling_std = original_values.rolling(
-                    window=self.config.outlier_detection_window, min_periods=10
-                ).std()
+                rolling_std = original_values.rolling(window=self.config.outlier_detection_window, min_periods=10).std()
 
                 # Detect extreme outliers
                 outlier_threshold = self.config.outlier_threshold
                 upper_bound = rolling_median + outlier_threshold * rolling_std
                 lower_bound = rolling_median - outlier_threshold * rolling_std
 
-                outliers = (original_values > upper_bound) | (
-                    original_values < lower_bound
-                )
+                outliers = (original_values > upper_bound) | (original_values < lower_bound)
                 outlier_count = outliers.sum()
 
                 if outlier_count > 0:
-                    self.logger.warning(
-                        f"Found {outlier_count} outliers in {col} for {symbol}"
-                    )
+                    self.logger.warning(f"Found {outlier_count} outliers in {col} for {symbol}")
 
                     # Apply winsorization to the entire series
                     winsorized_values = stats.mstats.winsorize(
@@ -180,9 +174,7 @@ class Preprocessor:
 
                     # Update the dataframe
                     valid_indices = original_values.dropna().index
-                    df_clean.loc[
-                        symbol_mask & df_clean.index.isin(valid_indices), col
-                    ] = winsorized_values
+                    df_clean.loc[symbol_mask & df_clean.index.isin(valid_indices), col] = winsorized_values
 
                     self.logger.info(f"Applied winsorization to {col} for {symbol}")
 
@@ -194,9 +186,7 @@ class Preprocessor:
 
         # Count trading days per symbol
         symbol_counts = df["symbol"].value_counts()
-        valid_symbols = symbol_counts[
-            symbol_counts >= self.config.min_trading_days
-        ].index
+        valid_symbols = symbol_counts[symbol_counts >= self.config.min_trading_days].index
 
         df_clean = df[df["symbol"].isin(valid_symbols)].copy()
         after_symbols = df_clean["symbol"].nunique()
@@ -231,9 +221,7 @@ class Preprocessor:
             ).sum()
 
             if invalid_ohlc > 0:
-                self.logger.error(
-                    f"Found {invalid_ohlc} invalid OHLC relationships after preprocessing"
-                )
+                self.logger.error(f"Found {invalid_ohlc} invalid OHLC relationships after preprocessing")
 
         self.logger.info("Final preprocessing summary by symbol:")
         for symbol in df["symbol"].unique():
@@ -242,13 +230,9 @@ class Preprocessor:
             date_range = f"{symbol_data['timestamp'].min().date()} to {symbol_data['timestamp'].max().date()}"
             avg_volume = symbol_data["volume"].mean()
 
-            self.logger.info(
-                f"  {symbol}: {count} days, {date_range}, avg volume: {avg_volume:,.0f}"
-            )
+            self.logger.info(f"  {symbol}: {count} days, {date_range}, avg volume: {avg_volume:,.0f}")
 
-    def get_preprocessing_stats(
-        self, df_before: pd.DataFrame, df_after: pd.DataFrame
-    ) -> Dict:
+    def get_preprocessing_stats(self, df_before: pd.DataFrame, df_after: pd.DataFrame) -> Dict:
         """
         Get preprocessing statistics.
 
@@ -263,16 +247,10 @@ class Preprocessor:
             "records_before": len(df_before),
             "records_after": len(df_after),
             "records_removed": len(df_before) - len(df_after),
-            "removal_rate": (len(df_before) - len(df_after)) / len(df_before)
-            if len(df_before) > 0
-            else 0,
-            "symbols_before": df_before["symbol"].nunique()
-            if not df_before.empty
-            else 0,
+            "removal_rate": (len(df_before) - len(df_after)) / len(df_before) if len(df_before) > 0 else 0,
+            "symbols_before": df_before["symbol"].nunique() if not df_before.empty else 0,
             "symbols_after": df_after["symbol"].nunique() if not df_after.empty else 0,
-            "symbols_removed": (
-                df_before["symbol"].nunique() - df_after["symbol"].nunique()
-            )
+            "symbols_removed": (df_before["symbol"].nunique() - df_after["symbol"].nunique())
             if not df_before.empty and not df_after.empty
             else 0,
         }

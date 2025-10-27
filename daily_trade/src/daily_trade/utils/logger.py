@@ -57,9 +57,7 @@ class AppLogger:
         logger.handlers.clear()
 
         # Create formatter
-        formatter = logging.Formatter(
-            "[%(asctime)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        formatter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
         # File handler
         log_filename = f"run_{datetime.now().strftime('%Y%m%d')}.log"

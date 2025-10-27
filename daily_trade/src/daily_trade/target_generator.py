@@ -16,9 +16,7 @@ from .utils.logger import get_logger
 class TargetConfig:
     """Configuration class for TargetGenerator."""
 
-    margin_pct: float = (
-        0.0  # Threshold for direction classification (e.g., 0.15 for 15bps)
-    )
+    margin_pct: float = 0.0  # Threshold for direction classification (e.g., 0.15 for 15bps)
     min_return_threshold: float = -0.5  # Minimum return threshold (e.g., -50%)
     max_return_threshold: float = 0.5  # Maximum return threshold (e.g., +50%)
     remove_incomplete_days: bool = True  # Remove rows without next day data
@@ -47,9 +45,7 @@ class TargetGenerator:
         self.config = config or TargetConfig()
         self.logger = get_logger()
 
-    def make_targets(
-        self, df: pd.DataFrame, margin_pct: Optional[float] = None
-    ) -> pd.DataFrame:
+    def make_targets(self, df: pd.DataFrame, margin_pct: Optional[float] = None) -> pd.DataFrame:
         """
         Create next-day return and direction targets from OHLCV data.
 
@@ -77,52 +73,36 @@ class TargetGenerator:
 
         # Validate required columns
         required_columns = ["timestamp", "symbol", "close"]
-        missing_columns = [
-            col for col in required_columns if col not in df_targets.columns
-        ]
+        missing_columns = [col for col in required_columns if col not in df_targets.columns]
         if missing_columns:
-            raise ValueError(
-                f"Missing required columns for target generation: {missing_columns}"
-            )
+            raise ValueError(f"Missing required columns for target generation: {missing_columns}")
 
         # Use provided margin_pct or config default
-        effective_margin = (
-            margin_pct if margin_pct is not None else self.config.margin_pct
-        )
-        self.logger.info(
-            f"Using margin threshold: {effective_margin:.4f} ({effective_margin * 100:.2f}%)"
-        )
+        effective_margin = margin_pct if margin_pct is not None else self.config.margin_pct
+        self.logger.info(f"Using margin threshold: {effective_margin:.4f} ({effective_margin * 100:.2f}%)")
 
         # Sort by symbol and timestamp to ensure proper temporal order
-        df_targets = df_targets.sort_values(["symbol", "timestamp"]).reset_index(
-            drop=True
-        )
+        df_targets = df_targets.sort_values(["symbol", "timestamp"]).reset_index(drop=True)
 
         # Calculate targets by symbol to prevent cross-contamination
         target_frames = []
         for symbol in df_targets["symbol"].unique():
             symbol_data = df_targets[df_targets["symbol"] == symbol].copy()
-            symbol_with_targets = self._create_targets_for_symbol(
-                symbol_data, effective_margin
-            )
+            symbol_with_targets = self._create_targets_for_symbol(symbol_data, effective_margin)
             target_frames.append(symbol_with_targets)
 
         # Combine all symbols
         df_combined = pd.concat(target_frames, ignore_index=True)
 
         # Sort by timestamp and symbol for consistent output
-        df_combined = df_combined.sort_values(["timestamp", "symbol"]).reset_index(
-            drop=True
-        )
+        df_combined = df_combined.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
 
         # Log summary statistics
         self._log_target_statistics(df_combined, df)
 
         return df_combined
 
-    def _create_targets_for_symbol(
-        self, df: pd.DataFrame, margin_pct: float
-    ) -> pd.DataFrame:
+    def _create_targets_for_symbol(self, df: pd.DataFrame, margin_pct: float) -> pd.DataFrame:
         """Create targets for a single symbol."""
         # Sort by timestamp to ensure proper ordering
         df = df.sort_values("timestamp").reset_index(drop=True)
@@ -134,9 +114,7 @@ class TargetGenerator:
         self.logger.debug(f"Using {price_column} for target calculation for {symbol}")
 
         # Calculate next-day return
-        df["next_ret"] = (
-            df[price_column].pct_change(periods=1).shift(-1)
-        )  # Shift back to align with current day
+        df["next_ret"] = df[price_column].pct_change(periods=1).shift(-1)  # Shift back to align with current day
 
         # Alternative calculation for clarity: next_ret = (next_close / close - 1)
         # This is equivalent but more explicit
@@ -147,17 +125,13 @@ class TargetGenerator:
         if self.config.min_return_threshold is not None:
             extreme_low = df["next_ret"] < self.config.min_return_threshold
             if extreme_low.sum() > 0:
-                self.logger.warning(
-                    f"Clipping {extreme_low.sum()} extreme low returns for {symbol}"
-                )
+                self.logger.warning(f"Clipping {extreme_low.sum()} extreme low returns for {symbol}")
                 df.loc[extreme_low, "next_ret"] = self.config.min_return_threshold
 
         if self.config.max_return_threshold is not None:
             extreme_high = df["next_ret"] > self.config.max_return_threshold
             if extreme_high.sum() > 0:
-                self.logger.warning(
-                    f"Clipping {extreme_high.sum()} extreme high returns for {symbol}"
-                )
+                self.logger.warning(f"Clipping {extreme_high.sum()} extreme high returns for {symbol}")
                 df.loc[extreme_high, "next_ret"] = self.config.max_return_threshold
 
         # Create direction label: 1 if next_ret > margin_pct, 0 otherwise
@@ -168,16 +142,12 @@ class TargetGenerator:
             valid_mask = df["next_ret"].notna()
             removed_count = (~valid_mask).sum()
             if removed_count > 0:
-                self.logger.debug(
-                    f"Removing {removed_count} incomplete days for {symbol}"
-                )
+                self.logger.debug(f"Removing {removed_count} incomplete days for {symbol}")
             df = df[valid_mask].copy()
 
         return df
 
-    def _log_target_statistics(
-        self, df_with_targets: pd.DataFrame, df_original: pd.DataFrame
-    ) -> None:
+    def _log_target_statistics(self, df_with_targets: pd.DataFrame, df_original: pd.DataFrame) -> None:
         """Log summary statistics about generated targets."""
         if df_with_targets.empty:
             self.logger.warning("No valid targets generated")
@@ -196,18 +166,10 @@ class TargetGenerator:
         if "next_ret" in df_with_targets.columns:
             returns = df_with_targets["next_ret"]
             self.logger.info("  Next-day return statistics:")
-            self.logger.info(
-                f"    Mean: {returns.mean():.6f} ({returns.mean() * 100:.4f}%)"
-            )
-            self.logger.info(
-                f"    Std:  {returns.std():.6f} ({returns.std() * 100:.4f}%)"
-            )
-            self.logger.info(
-                f"    Min:  {returns.min():.6f} ({returns.min() * 100:.4f}%)"
-            )
-            self.logger.info(
-                f"    Max:  {returns.max():.6f} ({returns.max() * 100:.4f}%)"
-            )
+            self.logger.info(f"    Mean: {returns.mean():.6f} ({returns.mean() * 100:.4f}%)")
+            self.logger.info(f"    Std:  {returns.std():.6f} ({returns.std() * 100:.4f}%)")
+            self.logger.info(f"    Min:  {returns.min():.6f} ({returns.min() * 100:.4f}%)")
+            self.logger.info(f"    Max:  {returns.max():.6f} ({returns.max() * 100:.4f}%)")
 
         # Direction statistics
         if "y_up" in df_with_targets.columns:
@@ -217,9 +179,7 @@ class TargetGenerator:
 
             self.logger.info("  Direction label statistics:")
             self.logger.info(f"    Up days (y_up=1): {up_count} ({up_rate:.3f})")
-            self.logger.info(
-                f"    Down/Flat days (y_up=0): {total_count - up_count} ({1 - up_rate:.3f})"
-            )
+            self.logger.info(f"    Down/Flat days (y_up=0): {total_count - up_count} ({1 - up_rate:.3f})")
 
         # Symbol-wise statistics
         self.logger.info("  By symbol:")
@@ -262,9 +222,7 @@ class TargetGenerator:
                 "up_days": df["y_up"].sum(),
                 "down_days": (df["y_up"] == 0).sum(),
                 "up_rate": df["y_up"].mean(),
-                "class_balance": abs(
-                    df["y_up"].mean() - 0.5
-                ),  # Deviation from 50-50 balance
+                "class_balance": abs(df["y_up"].mean() - 0.5),  # Deviation from 50-50 balance
             },
             "symbol_stats": {},
         }
@@ -317,9 +275,7 @@ class TargetGenerator:
         # Check for reasonable return range
         if (df["next_ret"] < -1.0).any() or (df["next_ret"] > 1.0).any():
             extreme_returns = df[(df["next_ret"] < -1.0) | (df["next_ret"] > 1.0)]
-            self.logger.warning(
-                f"Found {len(extreme_returns)} extreme returns (>100% or <-100%)"
-            )
+            self.logger.warning(f"Found {len(extreme_returns)} extreme returns (>100% or <-100%)")
 
         self.logger.info("Target validation passed")
         return True
