@@ -1,14 +1,13 @@
-"""
-DirectionModel - 翌日上昇確率予測モデル
+"""DirectionModel - 翌日上昇確率予測モデル.
 
 LightGBMを使用した二値分類モデルで、特徴量から翌日の株価上昇確率を予測します。
 TimeSeriesSplitによる交差検証でモデルの汎化性能を評価します。
 """
 
-import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+import pickle
+from typing import Optional, Union
 
 import lightgbm as lgb
 import numpy as np
@@ -21,7 +20,7 @@ from .utils.logger import AppLogger
 
 @dataclass
 class ModelConfig:
-    """DirectionModel設定"""
+    """DirectionModel設定."""
 
     # LightGBMパラメータ
     num_leaves: int = 31
@@ -49,11 +48,10 @@ class ModelConfig:
 
 
 class DirectionModel:
-    """翌日上昇確率予測モデル"""
+    """翌日上昇確率予測モデル."""
 
     def __init__(self, config: ModelConfig = None):
-        """
-        初期化
+        """初期化.
 
         Args:
             config: モデル設定
@@ -61,13 +59,12 @@ class DirectionModel:
         self.config = config or ModelConfig()
         self.logger = AppLogger()
         self.model: Optional[lgb.LGBMClassifier] = None
-        self.feature_names: Optional[List[str]] = None
-        self.feature_importances_: Optional[Dict[str, float]] = None
-        self.cv_scores_: Optional[Dict[str, List[float]]] = None
+        self.feature_names: Optional[list[str]] = None
+        self.feature_importances_: Optional[dict[str, float]] = None
+        self.cv_scores_: Optional[dict[str, list[float]]] = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "DirectionModel":
-        """
-        モデル学習
+        """モデル学習
 
         Args:
             X: 特徴量データ
@@ -125,8 +122,7 @@ class DirectionModel:
         return self
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-        """
-        上昇確率予測
+        """上昇確率予測
 
         Args:
             X: 特徴量データ
@@ -145,8 +141,7 @@ class DirectionModel:
         return self.model.predict_proba(X)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """
-        予測ラベル取得
+        """予測ラベル取得
 
         Args:
             X: 特徴量データ
@@ -156,9 +151,8 @@ class DirectionModel:
         """
         return self.model.predict(X)
 
-    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, float]:
-        """
-        モデル評価
+    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> dict[str, float]:
+        """モデル評価
 
         Args:
             X: 特徴量データ
@@ -188,9 +182,8 @@ class DirectionModel:
 
         return metrics
 
-    def cross_validate(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, List[float]]:
-        """
-        TimeSeriesSplit交差検証
+    def cross_validate(self, X: pd.DataFrame, y: pd.Series) -> dict[str, list[float]]:
+        """TimeSeriesSplit交差検証
 
         Args:
             X: 特徴量データ
@@ -263,7 +256,7 @@ class DirectionModel:
         std_scores = {metric: np.std(values) for metric, values in scores.items()}
 
         self.logger.info("交差検証完了:")
-        for metric in scores.keys():
+        for metric in scores:
             self.logger.info(f"  {metric}: {mean_scores[metric]:.3f} ± {std_scores[metric]:.3f}")
 
         # スコア保存
@@ -271,9 +264,8 @@ class DirectionModel:
 
         return scores
 
-    def get_feature_importance(self, top_n: int = 20) -> Dict[str, float]:
-        """
-        特徴量重要度取得
+    def get_feature_importance(self, top_n: int = 20) -> dict[str, float]:
+        """特徴量重要度取得
 
         Args:
             top_n: 上位N個の特徴量
@@ -290,8 +282,7 @@ class DirectionModel:
         return dict(sorted_importance[:top_n])
 
     def save_model(self, file_path: Union[str, Path]) -> None:
-        """
-        モデル保存
+        """モデル保存
 
         Args:
             file_path: 保存先パス
@@ -313,8 +304,7 @@ class DirectionModel:
         self.logger.info(f"モデル保存完了: {file_path}")
 
     def load_model(self, file_path: Union[str, Path]) -> "DirectionModel":
-        """
-        モデル読み込み
+        """モデル読み込み
 
         Args:
             file_path: モデルファイルパス

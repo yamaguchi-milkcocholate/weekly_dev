@@ -14,69 +14,14 @@ from daily_trade.utils.logger import get_logger
 
 @dataclass
 class PreprocessConfig:
-    """Configuration class for Preprocessor.
+    """Configuration class for Preprocessor."""
 
-    This class defines the parameters for data preprocessing operations including
-    outlier detection, data filtering, and quality validation.
-    """
-
-    # データフィルタリング設定
     remove_zero_volume: bool = True
-    """出来高ゼロの取引日を除外するかどうか
-    True: 出来高が0の日を除外(推奨)
-    False: 出来高ゼロの日も保持
-    理由: 出来高ゼロの日は取引が成立しておらず、価格データの信頼性が低い
-    """
-
-    # 外れ値処理設定
     winsorize_enabled: bool = True
-    """Winsorization(外れ値の上下限クリッピング)を有効にするかどうか
-    True: 外れ値をwinsorize_limitsで指定した分位点でクリッピング
-    False: 外れ値処理を無効化
-    効果: 極端な価格変動やデータ異常による学習への悪影響を軽減
-    """
-
-    winsorize_limits: tuple = (0.01, 0.99)
-    """Winsorization処理の上下限分位点 (下限分位点, 上限分位点)
-    デフォルト: (0.01, 0.99) = 1%タイル〜99%タイル
-    - 下位1%のデータは1%タイル値に置換
-    - 上位1%のデータは99%タイル値に置換
-    調整指針:
-    - より保守的: (0.025, 0.975) = 2.5%〜97.5%
-    - より寛容: (0.005, 0.995) = 0.5%〜99.5%
-    """
-
-    outlier_detection_window: int = 60
-    """外れ値検出用の移動窓サイズ(取引日数)
-    デフォルト: 60日(約3ヶ月間)
-    用途: ローリング統計量(中央値、標準偏差)計算に使用
-    - 短期間(20-30日): より敏感な外れ値検出、頻繁な調整
-    - 長期間(90-120日): より安定した基準、保守的な検出
-    注意: 各銘柄でmin_periods=10として最低限の統計量計算を保証
-    """
-
-    outlier_threshold: float = 10.0
-    """外れ値判定の標準偏差倍率閾値(sigma倍)
-    デフォルト: 10.0sigma(非常に保守的)
-    判定基準: |価格 - ローリング中央値| > threshold * ローリング標準偏差
-    調整指針:
-    - より厳格: 3.0-5.0sigma(より多くの外れ値を検出)
-    - より寛容: 15.0-20.0sigma(極端な異常のみ検出)
-    注意: 金融データは自然に大きな変動を含むため、過度に厳格な設定は避ける
-    """
-
-    min_trading_days: int = 20
-    """銘柄あたりの最低必要取引日数
-    デフォルト: 20日(約1ヶ月間)
-    用途: データ量が不十分な銘柄の除外
-    - 新規上場銘柄や流動性の低い銘柄をフィルタリング
-    - 統計的に信頼できる特徴量計算のための最低限データ量確保
-    調整指針:
-    - 短期分析: 10-15日
-    - 中期分析: 30-60日
-    - 長期分析: 90-120日
-    トレードオフ: 高い値ほど品質向上、低い値ほど銘柄カバレッジ向上
-    """
+    winsorize_limits: tuple = (0.01, 0.99)  # 1st and 99th percentiles
+    outlier_detection_window: int = 60  # days for outlier detection
+    outlier_threshold: float = 10.0  # sigma threshold
+    min_trading_days: int = 20  # minimum trading days required per symbol
 
 
 class Preprocessor:

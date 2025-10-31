@@ -18,6 +18,9 @@ dependencies = [
     "lightgbm>=4.5.0",
     "scikit-learn>=1.6.0",
     "pyyaml>=6.0.0",
+    "plotly>=6.3.1",
+    "ipykernel>=7.1.0",
+    "nbformat>=5.10.4",
 ]
 
 
@@ -78,8 +81,8 @@ select = [
     "W",    # pycodestyle warnings
     "F",    # Pyflakes
     "I",    # isort
-    "N",    # pep8-naming
-    "D",    # pydocstyle
+    # "N",    # pep8-naming
+    # "D",    # pydocstyle
     "UP",   # pyupgrade
     "B",    # flake8-bugbear
     "A",    # flake8-builtins
