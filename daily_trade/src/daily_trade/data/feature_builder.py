@@ -5,13 +5,12 @@ features from stock price data.
 """
 
 from dataclasses import dataclass
-from typing import List
 
 import numpy as np
 import pandas as pd
 import ta
 
-from ..utils.logger import get_logger
+from daily_trade.utils.logger import get_logger
 
 
 @dataclass
@@ -19,8 +18,8 @@ class FeatureConfig:
     """Configuration class for FeatureBuilder."""
 
     # Moving Averages
-    sma_windows: List[int] = None
-    ema_windows: List[int] = None
+    sma_windows: list[int] = None
+    ema_windows: list[int] = None
 
     # Volatility indicators
     atr_window: int = 14
@@ -30,7 +29,7 @@ class FeatureConfig:
     volume_ratio_window: int = 20
 
     # Momentum indicators
-    return_windows: List[int] = None
+    return_windows: list[int] = None
 
     # Technical indicators
     rsi_window: int = 14
@@ -130,7 +129,7 @@ class FeatureBuilder:
         new_columns = set(df_combined.columns) - original_columns
 
         self.logger.info(f"Feature building completed: {len(new_columns)} new features generated")
-        self.logger.info(f"New features: {sorted(list(new_columns))}")
+        self.logger.info(f"New features: {sorted(new_columns)}")
 
         return df_combined
 
@@ -152,7 +151,7 @@ class FeatureBuilder:
         df = self._add_momentum_features(df, price_column)
 
         # 5. Technical indicators
-        df = self._add_technical_features(df, price_column)
+        df = self._add_technical_features(df)
 
         # 6. Seasonality features
         df = self._add_seasonality_features(df)
@@ -264,7 +263,7 @@ class FeatureBuilder:
 
         return df
 
-    def _add_technical_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
+    def _add_technical_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add additional technical indicators."""
         # Check if we have enough data for indicators
         min_periods_required = 14  # Most indicators need at least 14 periods
@@ -323,6 +322,14 @@ class FeatureBuilder:
         # Day of month (1-31)
         df["day_of_month"] = df["timestamp"].dt.day
 
+        # 前日がデータにあるか
+        prev_series = df["timestamp"].shift(1)
+        df["prev_day"] = prev_series == (df["timestamp"] - pd.Timedelta(days=1))
+
+        # 翌日がデータにあるか
+        next_series = df["timestamp"].shift(-1)
+        df["next_day"] = next_series == (df["timestamp"] + pd.Timedelta(days=1))
+
         return df
 
     def _calculate_slope(self, price_series: pd.Series, window: int) -> pd.Series:
@@ -336,7 +343,7 @@ class FeatureBuilder:
 
         return price_series.rolling(window=window, min_periods=2).apply(rolling_slope, raw=False)
 
-    def get_feature_list(self) -> List[str]:
+    def get_feature_list(self) -> list[str]:
         """Get list of all features that will be generated."""
         features = []
 
