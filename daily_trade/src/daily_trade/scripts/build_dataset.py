@@ -317,8 +317,8 @@ def build_dataset(
         logger.info("3. 特徴量生成開始...")
         feature_config = FeatureConfig()
         feature_builder = FeatureBuilder(feature_config)
-        feature_data = feature_builder.build(clean_data)
-        logger.info(f"Feature data: {feature_data.shape}, columns: {len(feature_data.columns)}")
+        feature_data, feature_columns = feature_builder.build(clean_data)
+        logger.info(f"Feature data: {feature_data.shape}, columns: {len(feature_columns)}")
 
         # 4. ターゲット生成
         logger.info("4. ターゲット生成開始...")
@@ -330,6 +330,10 @@ def build_dataset(
         # 5. データ保存
         logger.info("5. データ保存開始...")
         final_data.to_parquet(output_path, index=False)
+        with open(output_path.with_suffix(".features.txt"), "w", encoding="utf-8") as f:
+            for col in feature_columns:
+                f.write(f"{col}\n")
+        logger.info(f"特徴量リスト保存: {output_path.with_suffix('.features.txt')}")
         logger.info(f"データセット保存完了: {output_path}")
 
         # 6. 統計サマリー

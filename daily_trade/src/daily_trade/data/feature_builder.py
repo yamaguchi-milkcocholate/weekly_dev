@@ -74,7 +74,7 @@ class FeatureBuilder:
         self.config = config
         self.logger = get_logger()
 
-    def build(self, df: pd.DataFrame) -> pd.DataFrame:
+    def build(self, df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         """
         Build technical features from OHLCV data.
 
@@ -83,6 +83,7 @@ class FeatureBuilder:
 
         Returns:
             DataFrame with added technical features
+            List of new feature column names
         """
         self.logger.info(f"Start feature building for {len(df)} records")
 
@@ -115,7 +116,7 @@ class FeatureBuilder:
         feature_frames = []
         for symbol in df_features["symbol"].unique():
             symbol_data = df_features[df_features["symbol"] == symbol].copy()
-            symbol_data_with_features = self._build_features_for_symbol(symbol_data, price_column)
+            symbol_data_with_features, new_columns_ = self._build_features_for_symbol(symbol_data, price_column)
             feature_frames.append(symbol_data_with_features)
 
         # Combine all symbols
@@ -124,43 +125,56 @@ class FeatureBuilder:
         # Sort by timestamp and symbol
         df_combined = df_combined.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
 
-        # Count generated features
-        original_columns = set(df.columns)
-        new_columns = set(df_combined.columns) - original_columns
+        new_columns = new_columns_
 
         self.logger.info(f"Feature building completed: {len(new_columns)} new features generated")
         self.logger.info(f"New features: {sorted(new_columns)}")
 
-        return df_combined
+        return df_combined, new_columns
 
     def _build_features_for_symbol(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
         """Build features for a single symbol."""
         # Sort by timestamp to ensure proper ordering
         df = df.sort_values("timestamp").reset_index(drop=True)
 
+        feature_columns = []
+
         # 1. Trend indicators
-        df = self._add_trend_features(df, price_column)
+        df, new_columns = self._add_trend_features(df, price_column)
+        feature_columns.extend(new_columns)
 
         # 2. Volatility indicators
-        df = self._add_volatility_features(df, price_column)
+        df, new_columns = self._add_volatility_features(df, price_column)
+        feature_columns.extend(new_columns)
 
         # 3. Volume indicators
-        df = self._add_volume_features(df, price_column)
+        df, new_columns = self._add_volume_features(df, price_column)
+        feature_columns.extend(new_columns)
 
         # 4. Momentum indicators
-        df = self._add_momentum_features(df, price_column)
+        df, new_columns = self._add_momentum_features(df, price_column)
+        feature_columns.extend(new_columns)
 
         # 5. Technical indicators
-        df = self._add_technical_features(df)
+        df, new_columns = self._add_technical_features(df)
+        feature_columns.extend(new_columns)
 
         # 6. Seasonality features
-        df = self._add_seasonality_features(df)
+        df, new_columns = self._add_seasonality_features(df)
+        feature_columns.extend(new_columns)
 
-        return df
+        # 7. Flag leading NaNs
+        df = self._flag_leading_nans(df, feature_columns)
 
-    def _add_trend_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
+        self.logger.info(f"Total new features for symbol {df['symbol'].iloc[0]}: {feature_columns}")
+
+        return df, feature_columns
+
+    def _add_trend_features(self, df: pd.DataFrame, price_column: str) -> tuple[pd.DataFrame, list[str]]:
         """Add trend-based features."""
         price_series = df[price_column]
+
+        prev_columns = df.columns.tolist()
 
         # Simple Moving Averages
         for window in self.config.sma_windows:
@@ -176,10 +190,16 @@ class FeatureBuilder:
         # Slope as percentage
         df[f"slope_pct_{self.config.slope_window}"] = df[f"slope_{self.config.slope_window}"] / price_series
 
-        return df
+        post_columns = df.columns.tolist()
+        new_columns = sorted(set(post_columns) - set(prev_columns))
+        self.logger.info(f"New features added in _add_trend_features: {sorted(new_columns)}")
 
-    def _add_volatility_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
+        return df, new_columns
+
+    def _add_volatility_features(self, df: pd.DataFrame, price_column: str) -> tuple[pd.DataFrame, list[str]]:
         """Add volatility-based features."""
+        prev_columns = df.columns.tolist()
+
         # Average True Range
         atr_indicator = ta.volatility.AverageTrueRange(
             high=df["high"],
@@ -208,10 +228,16 @@ class FeatureBuilder:
         df[f"bb_width_{self.config.bollinger_window}"] = bollinger.bollinger_wband()
         df[f"bb_pband_{self.config.bollinger_window}"] = bollinger.bollinger_pband()
 
-        return df
+        post_columns = df.columns.tolist()
+        new_columns = sorted(set(post_columns) - set(prev_columns))
+        self.logger.info(f"New features added in _add_volatility_features: {sorted(new_columns)}")
 
-    def _add_volume_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
+        return df, new_columns
+
+    def _add_volume_features(self, df: pd.DataFrame, price_column: str) -> tuple[pd.DataFrame, list[str]]:
         """Add volume-based features."""
+        prev_columns = df.columns.tolist()
+
         # Volume ratio (current volume / average volume)
         df[f"vol_ratio_{self.config.volume_ratio_window}"] = (
             df["volume"] / df["volume"].rolling(window=self.config.volume_ratio_window, min_periods=1).mean()
@@ -230,11 +256,16 @@ class FeatureBuilder:
 
         # On-Balance Volume (OBV)
         df["obv"] = ta.volume.OnBalanceVolumeIndicator(close=df[price_column], volume=df["volume"]).on_balance_volume()
+        post_columns = df.columns.tolist()
+        new_columns = sorted(set(post_columns) - set(prev_columns))
+        self.logger.info(f"New features added in _add_volume_features: {sorted(new_columns)}")
 
-        return df
+        return df, new_columns
 
-    def _add_momentum_features(self, df: pd.DataFrame, price_column: str) -> pd.DataFrame:
+    def _add_momentum_features(self, df: pd.DataFrame, price_column: str) -> tuple[pd.DataFrame, list[str]]:
         """Add momentum-based features."""
+        prev_columns = df.columns.tolist()
+
         # Price returns for different periods
         for window in self.config.return_windows:
             df[f"ret_{window}d"] = df[price_column].pct_change(periods=window)
@@ -261,10 +292,16 @@ class FeatureBuilder:
         df["stoch_k"] = stoch_indicator.stoch()
         df["stoch_d"] = stoch_indicator.stoch_signal()
 
-        return df
+        post_columns = df.columns.tolist()
+        new_columns = sorted(set(post_columns) - set(prev_columns))
+        self.logger.info(f"New features added in _add_momentum_features: {sorted(new_columns)}")
 
-    def _add_technical_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df, new_columns
+
+    def _add_technical_features(self, df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         """Add additional technical indicators."""
+        prev_columns = df.columns.tolist()
+
         # Check if we have enough data for indicators
         min_periods_required = 14  # Most indicators need at least 14 periods
 
@@ -306,10 +343,16 @@ class FeatureBuilder:
             df["adx_pos"] = np.nan
             df["adx_neg"] = np.nan
 
-        return df
+        post_columns = df.columns.tolist()
+        new_columns = sorted(set(post_columns) - set(prev_columns))
+        self.logger.info(f"New features added in _add_technical_features: {sorted(new_columns)}")
 
-    def _add_seasonality_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df, new_columns
+
+    def _add_seasonality_features(self, df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         """Add seasonality features."""
+        prev_columns = df.columns.tolist()
+
         # Day of week (0=Monday, 6=Sunday)
         df["dow"] = df["timestamp"].dt.weekday
 
@@ -330,7 +373,11 @@ class FeatureBuilder:
         next_series = df["timestamp"].shift(-1)
         df["next_day"] = next_series == (df["timestamp"] + pd.Timedelta(days=1))
 
-        return df
+        post_columns = df.columns.tolist()
+        new_columns = sorted(set(post_columns) - set(prev_columns))
+        self.logger.info(f"New features added in _add_seasonality_features: {sorted(new_columns)}")
+
+        return df, new_columns
 
     def _calculate_slope(self, price_series: pd.Series, window: int) -> pd.Series:
         """Calculate rolling linear regression slope."""
@@ -343,64 +390,17 @@ class FeatureBuilder:
 
         return price_series.rolling(window=window, min_periods=2).apply(rolling_slope, raw=False)
 
-    def get_feature_list(self) -> list[str]:
-        """Get list of all features that will be generated."""
-        features = []
+    def _flag_leading_nans(self, df: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
+        """先頭からNanが続く限りTrueとなるフラグを追加"""
+        is_leading_nan_columns = []
+        for col in feature_columns:
+            nan_mask = df[col].isna()
+            leading_nan_mask = nan_mask.cumprod().astype(bool)
+            df[f"{col}_is_leading_nan"] = leading_nan_mask
+            is_leading_nan_columns.append(f"{col}_is_leading_nan")
 
-        # Trend features
-        for window in self.config.sma_windows:
-            features.append(f"sma_{window}")
-        for window in self.config.ema_windows:
-            features.append(f"ema_{window}")
-        features.extend(
-            [
-                f"slope_{self.config.slope_window}",
-                f"slope_pct_{self.config.slope_window}",
-            ]
-        )
+        contains_leading_nan = df[is_leading_nan_columns].any(axis=1)
+        df["contains_leading_nan"] = contains_leading_nan
+        df.drop(columns=is_leading_nan_columns, inplace=True)
 
-        # Volatility features
-        features.extend(
-            [
-                f"atr_{self.config.atr_window}",
-                f"atr_pct_{self.config.atr_window}",
-                f"stdev_{self.config.stdev_window}",
-                f"bb_upper_{self.config.bollinger_window}",
-                f"bb_lower_{self.config.bollinger_window}",
-                f"bb_middle_{self.config.bollinger_window}",
-                f"bb_width_{self.config.bollinger_window}",
-                f"bb_pband_{self.config.bollinger_window}",
-            ]
-        )
-
-        # Volume features
-        features.extend(
-            [
-                f"vol_ratio_{self.config.volume_ratio_window}",
-                f"tov_ratio_{self.config.volume_ratio_window}",
-                "vpt",
-                "obv",
-            ]
-        )
-
-        # Momentum features
-        for window in self.config.return_windows:
-            features.append(f"ret_{window}d")
-        features.extend(
-            [
-                f"rsi_{self.config.rsi_window}",
-                "macd",
-                "macd_signal",
-                "macd_hist",
-                "stoch_k",
-                "stoch_d",
-            ]
-        )
-
-        # Technical features
-        features.extend(["williams_r", "cci", "adx", "adx_pos", "adx_neg"])
-
-        # Seasonality features
-        features.extend(["dow", "month", "quarter", "day_of_month"])
-
-        return features
+        return df
