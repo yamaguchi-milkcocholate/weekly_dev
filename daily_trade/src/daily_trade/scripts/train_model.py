@@ -27,32 +27,36 @@ def load_config_from_yaml(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def load_dataset(file_path: str) -> pd.DataFrame:
+def load_dataset(file_path: str) -> tuple[pd.DataFrame, list[str]]:
     """データセットを読み込み."""
     logger = AppLogger()
     logger.info(f"データセット読み込み: {file_path}")
 
-    if not Path(file_path).exists():
+    file_path = Path(file_path)
+
+    if not file_path.exists():
         raise FileNotFoundError(f"ファイルが見つかりません: {file_path}")
 
     df = pd.read_parquet(file_path)
     logger.info(f"データセット形状: {df.shape}")
     logger.info(f"列: {list(df.columns)}")
 
-    return df
+    with Path.open(file_path.with_suffix(".features.txt"), "r", encoding="utf-8") as f:
+        feature_columns = [line.strip() for line in f.readlines()]
+
+    logger.info(f"特徴量数: {len(feature_columns)}")
+    return df, feature_columns
 
 
-def prepare_model_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+def prepare_model_data(df: pd.DataFrame, feature_cols: list[str]) -> tuple[pd.DataFrame, pd.Series]:
     """モデル学習用データを準備."""
     logger = AppLogger()
 
-    # 特徴量カラム（timestamp, target以外）
-    exclude_cols = ["timestamp", "next_ret", "y_up"]
+    num_drops = df["contains_leading_nan"].sum()
+    logger.info(f"先頭欠損行数: {num_drops} / {len(df)}")
 
-    feature_cols = [col for col in df.columns if col not in exclude_cols]
-
-    x = df[feature_cols].copy()
-    y = df["y_up"].copy()
+    x = df.loc[~df["contains_leading_nan"], feature_cols].copy()
+    y = df.loc[~df["contains_leading_nan"], "y_up"].copy()
 
     # symbolをカテゴリ変数として処理
     # symbolをカテゴリ型に変換
@@ -146,10 +150,10 @@ def train_model(
 
     try:
         # 1. データセット読み込み
-        df = load_dataset(input_path)
+        df, feature_columns = load_dataset(input_path)
 
         # 2. モデル学習用データ準備
-        x, y = prepare_model_data(df)
+        x, y = prepare_model_data(df, feature_columns)
 
         # 3. モデル設定
         if model_config is None:

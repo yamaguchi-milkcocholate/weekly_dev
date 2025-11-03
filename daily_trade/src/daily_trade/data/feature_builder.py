@@ -137,7 +137,7 @@ class FeatureBuilder:
         # Sort by timestamp to ensure proper ordering
         df = df.sort_values("timestamp").reset_index(drop=True)
 
-        feature_columns = []
+        feature_columns = ["symbol"]
 
         # 1. Trend indicators
         df, new_columns = self._add_trend_features(df, price_column)

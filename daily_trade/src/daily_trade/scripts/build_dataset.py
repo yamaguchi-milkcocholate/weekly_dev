@@ -330,7 +330,7 @@ def build_dataset(
         # 5. データ保存
         logger.info("5. データ保存開始...")
         final_data.to_parquet(output_path, index=False)
-        with open(output_path.with_suffix(".features.txt"), "w", encoding="utf-8") as f:
+        with Path.open(output_path.with_suffix(".features.txt"), "w", encoding="utf-8") as f:
             for col in feature_columns:
                 f.write(f"{col}\n")
         logger.info(f"特徴量リスト保存: {output_path.with_suffix('.features.txt')}")
