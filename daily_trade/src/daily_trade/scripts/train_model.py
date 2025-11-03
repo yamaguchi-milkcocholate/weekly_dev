@@ -10,6 +10,7 @@ Usage:
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Optional
 
@@ -32,7 +33,7 @@ def load_dataset(file_path: str) -> tuple[pd.DataFrame, list[str]]:
     logger = AppLogger()
     logger.info(f"データセット読み込み: {file_path}")
 
-    file_path = Path(file_path)
+    file_path = Path(file_path).resolve()
 
     if not file_path.exists():
         raise FileNotFoundError(f"ファイルが見つかりません: {file_path}")
@@ -161,18 +162,20 @@ def train_model(
         else:
             model_config.cv_splits = cv_splits
 
-        # 4. モデル学習
-        logger.info("モデル学習開始...")
         model = DirectionModel(model_config)
-        model.fit(x, y)
 
-        # 5. モデル評価
-        logger.info("モデル評価...")
-        metrics = model.evaluate(x, y)
-
-        # 6. 交差検証
+        # 4. 交差検証
         logger.info("交差検証実行...")
         cv_scores = model.cross_validate(x, y)
+
+        # 5. モデル学習
+        logger.info("モデル学習開始...")
+        n_estimators = math.floor(pd.Series(cv_scores["best_iteration"]).max())
+        model.fit(x, y, n_estimators=n_estimators)
+
+        # 6. モデル評価
+        logger.info("モデル評価...")
+        metrics = model.evaluate(x, y)
 
         # 7. 特徴量重要度
         feature_importance = model.get_feature_importance(top_n=20)

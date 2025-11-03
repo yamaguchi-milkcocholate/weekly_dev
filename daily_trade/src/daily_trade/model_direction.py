@@ -4,6 +4,7 @@ LightGBMを使用した二値分類モデルで、特徴量から翌日の株価
 TimeSeriesSplitによる交差検証でモデルの汎化性能を評価します。
 """
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 import pickle
@@ -12,7 +13,7 @@ from typing import Optional, Union
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import accuracy_score, average_precision_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 
 from .utils.logger import AppLogger
@@ -63,12 +64,13 @@ class DirectionModel:
         self.feature_importances_: Optional[dict[str, float]] = None
         self.cv_scores_: Optional[dict[str, list[float]]] = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "DirectionModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series, n_estimators: int) -> "DirectionModel":
         """モデル学習
 
         Args:
             X: 特徴量データ
             y: ターゲット（0: 下落, 1: 上昇）
+            n_estimators: 学習器数
 
         Returns:
             学習済みモデル
@@ -99,18 +101,18 @@ class DirectionModel:
             reg_alpha=self.config.reg_alpha,
             reg_lambda=self.config.reg_lambda,
             random_state=self.config.random_state,
-            n_estimators=self.config.n_estimators,
-            verbose=-1,
+            n_estimators=n_estimators,
         )
 
         # 学習実行
         self.model.fit(
             X,
             y,
-            eval_set=[(X, y)],
+            # 同じオブジェクトを渡すとvalid aucが計算されないため、deepcopyで回避
+            eval_set=[(deepcopy(X), deepcopy(y))],
             callbacks=[
                 lgb.early_stopping(self.config.early_stopping_rounds),
-                lgb.log_evaluation(0),
+                lgb.log_evaluation(1),
             ],
         )
 
@@ -174,6 +176,7 @@ class DirectionModel:
             "accuracy": accuracy_score(y, y_pred),
             "precision": precision_score(y, y_pred, average=self.config.average, zero_division=0),
             "recall": recall_score(y, y_pred, average=self.config.average, zero_division=0),
+            "average_precision": average_precision_score(y, y_proba),
             "n_samples": len(y),
             "pos_ratio": y.mean(),
         }
@@ -197,7 +200,14 @@ class DirectionModel:
         # 時系列分割
         tscv = TimeSeriesSplit(n_splits=self.config.cv_splits)
 
-        scores = {"auc": [], "accuracy": [], "precision": [], "recall": []}
+        scores = {
+            "auc": [],
+            "accuracy": [],
+            "precision": [],
+            "recall": [],
+            "average_precision": [],
+            "best_iteration": [],
+        }
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
             self.logger.info(f"Fold {fold + 1}/{self.config.cv_splits}: train={len(train_idx)}, val={len(val_idx)}")
@@ -243,6 +253,8 @@ class DirectionModel:
                 "accuracy": accuracy_score(y_val, y_pred),
                 "precision": precision_score(y_val, y_pred, average=self.config.average, zero_division=0),
                 "recall": recall_score(y_val, y_pred, average=self.config.average, zero_division=0),
+                "average_precision": average_precision_score(y_val, y_proba),
+                "best_iteration": fold_model.best_iteration_,
             }
 
             # スコア記録
@@ -298,7 +310,7 @@ class DirectionModel:
             "cv_scores_": self.cv_scores_,
         }
 
-        with open(file_path, "wb") as f:
+        with Path.open(file_path, "wb") as f:
             pickle.dump(save_data, f)
 
         self.logger.info(f"モデル保存完了: {file_path}")
@@ -312,7 +324,7 @@ class DirectionModel:
         Returns:
             読み込み済みモデル
         """
-        with open(file_path, "rb") as f:
+        with Path.open(file_path, "rb") as f:
             save_data = pickle.load(f)
 
         self.model = save_data["model"]
