@@ -186,12 +186,13 @@ class DirectionModel:
 
         return metrics
 
-    def cross_validate(self, X: pd.DataFrame, y: pd.Series) -> dict[str, list[float]]:
+    def cross_validate(self, X: pd.DataFrame, y: pd.Series, symbols: pd.Series) -> dict[str, list[float]]:
         """TimeSeriesSplit交差検証
 
         Args:
             X: 特徴量データ
             y: ターゲット
+            symbols: 銘柄シンボルデータ
 
         Returns:
             各FoldのスコアDict
@@ -209,13 +210,14 @@ class DirectionModel:
             "average_precision": [],
             "best_iteration": [],
         }
-
+        symbol_scores = []
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
             self.logger.info(f"Fold {fold + 1}/{self.config.cv_splits}: train={len(train_idx)}, val={len(val_idx)}")
 
             # データ分割
             X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
             y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+            symbol_val = symbols.iloc[val_idx]
 
             # モデル学習
             fold_model = lgb.LGBMClassifier(
@@ -259,6 +261,29 @@ class DirectionModel:
                 "best_iteration": fold_model.best_iteration_,
             }
 
+            for symbol in sorted(symbol_val.unique()):
+                symbol_mask = symbol_val == symbol
+                symbol_y_val, symbol_y_pred, symbol_y_proba = (
+                    y_val[symbol_mask],
+                    y_pred[symbol_mask],
+                    y_proba[symbol_mask],
+                )
+                symbol_scores.append(
+                    {
+                        "fold": fold + 1,
+                        "symbol": symbol,
+                        "auc": roc_auc_score(symbol_y_val, symbol_y_proba),
+                        "accuracy": accuracy_score(symbol_y_val, symbol_y_pred),
+                        "precision": precision_score(
+                            symbol_y_val, symbol_y_pred, average=self.config.average, zero_division=0
+                        ),
+                        "recall": recall_score(
+                            symbol_y_val, symbol_y_pred, average=self.config.average, zero_division=0
+                        ),
+                        "average_precision": average_precision_score(symbol_y_val, symbol_y_proba),
+                    }
+                )
+
             # スコア記録
             for metric, score in fold_scores.items():
                 scores[metric].append(score)
@@ -269,6 +294,9 @@ class DirectionModel:
         mean_scores = {metric: np.mean(values) for metric, values in scores.items()}
         std_scores = {metric: np.std(values) for metric, values in scores.items()}
 
+        # 銘柄別スコア計算
+        symbol_df = pd.DataFrame(symbol_scores)
+
         self.logger.info("交差検証完了:")
         for metric in scores:
             self.logger.info(f"  {metric}: {mean_scores[metric]:.3f} ± {std_scores[metric]:.3f}")
@@ -276,7 +304,7 @@ class DirectionModel:
         # スコア保存
         self.cv_scores_ = scores
 
-        return scores
+        return scores, symbol_df
 
     def get_feature_importance(self, top_n: int = 20) -> dict[str, float]:
         """特徴量重要度取得

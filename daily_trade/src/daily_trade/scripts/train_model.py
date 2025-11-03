@@ -53,11 +53,13 @@ def prepare_model_data(df: pd.DataFrame, feature_cols: list[str]) -> tuple[pd.Da
     """モデル学習用データを準備."""
     logger = AppLogger()
 
+    df = df.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
     num_drops = df["contains_leading_nan"].sum()
     logger.info(f"先頭欠損行数: {num_drops} / {len(df)}")
 
     x = df.loc[~df["contains_leading_nan"], feature_cols].copy()
     y = df.loc[~df["contains_leading_nan"], "y_up"].copy()
+    symbol = df.loc[~df["contains_leading_nan"], "symbol"].copy()
 
     # symbolをカテゴリ変数として処理
     # symbolをカテゴリ型に変換
@@ -78,12 +80,13 @@ def prepare_model_data(df: pd.DataFrame, feature_cols: list[str]) -> tuple[pd.Da
     if null_counts.any():
         logger.warning(f"特徴量欠損値: {null_counts[null_counts > 0].to_dict()}")
 
-    return x, y
+    return x, y, symbol
 
 
 def save_evaluation_report(
     metrics: dict[str, float],
     cv_scores: dict[str, list],
+    cv_symbol_df: pd.DataFrame,
     feature_importance: dict[str, float],
     output_path: str,
 ) -> None:
@@ -100,15 +103,20 @@ def save_evaluation_report(
             return [convert_numpy_types(item) for item in obj]
         return obj
 
+    cv_symbol_means = cv_symbol_df.drop(columns=["fold"]).groupby("symbol").mean().to_dict(orient="index")
+
     report = {
         "evaluation_metrics": convert_numpy_types(metrics),
         "cross_validation": {
-            metric: {
-                "mean": float(pd.Series(scores).mean()),
-                "std": float(pd.Series(scores).std()),
-                "scores": [float(score) for score in scores],
-            }
-            for metric, scores in cv_scores.items()
+            "summary": {
+                metric: {
+                    "mean": float(pd.Series(scores).mean()),
+                    "std": float(pd.Series(scores).std()),
+                    "scores": [float(score) for score in scores],
+                }
+                for metric, scores in cv_scores.items()
+            },
+            "per_symbol": cv_symbol_means,
         },
         "feature_importance": convert_numpy_types(feature_importance),
         "metadata": {
@@ -154,7 +162,7 @@ def train_model(
         df, feature_columns = load_dataset(input_path)
 
         # 2. モデル学習用データ準備
-        x, y = prepare_model_data(df, feature_columns)
+        x, y, symbols = prepare_model_data(df, feature_columns)
 
         # 3. モデル設定
         if model_config is None:
@@ -166,7 +174,7 @@ def train_model(
 
         # 4. 交差検証
         logger.info("交差検証実行...")
-        cv_scores = model.cross_validate(x, y)
+        cv_scores, cv_symbol_df = model.cross_validate(x, y, symbols)
 
         # 5. モデル学習
         logger.info("モデル学習開始...")
@@ -187,7 +195,7 @@ def train_model(
 
         # 9. 評価レポート保存
         if save_report:
-            save_evaluation_report(metrics, cv_scores, feature_importance, output_path)
+            save_evaluation_report(metrics, cv_scores, cv_symbol_df, feature_importance, output_path)
 
         # 10. 結果サマリー
         logger.info("=== 学習結果サマリー ===")
