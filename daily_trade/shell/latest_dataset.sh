@@ -7,7 +7,7 @@ ONE_YEAR_AGO=$(date -v-1y +%Y-%m-%d)
 echo $ONE_YEAR_AGO ~ $YESTERDAY
 
 uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular dow30 sp500_tech etf jp_major \
+  --config ./config/dataset_config.yaml \
   --start $ONE_YEAR_AGO \
   --end $YESTERDAY \
   --output ./data/ohlcv/latest_dataset.parquet

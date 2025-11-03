@@ -2,13 +2,9 @@
 # python -m daily_trade.scripts.build_dataset --config build_config.yaml
 
 # データ取得設定
-symbols:
-  - "AAPL"
-  - "MSFT"
-  - "GOOGL"
+symbols: []
+symbol_category: ["popular", "dow30", "sp500_tech", "etf", "jp_major"]
 
-start_date: "2020-01-01"
-end_date: "2025-01-01"
 interval: "1d" # 1d, 1wk, 1mo
 
 # ターゲット設定
@@ -19,4 +15,4 @@ winsorize_pct: 0.01 # 1% Winsorize処理
 min_trading_days: 100 # 最小取引日数
 
 # 出力設定
-output_path: "./data/daily_ohlcv_features.parquet"
+output_path: "./data/ohlcv/latest_dataset.parquet"

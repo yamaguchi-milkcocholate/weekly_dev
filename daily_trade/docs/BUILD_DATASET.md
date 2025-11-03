@@ -7,9 +7,9 @@
 ### 最小限の実行例
 
 ```bash
-# 基本的な実行
+# 基本的な実行（設定ファイル必須）
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular \
+  --config dataset_config.yaml \
   --start 2024-01-01 \
   --end 2024-12-31
 ```
@@ -54,169 +54,161 @@ PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset --list-categ
 
 ## 💼 実行パターン
 
-### パターン 1: 事前定義銘柄カテゴリを使用（推奨）
+### パターン 1: 設定ファイル使用（推奨）
 
-#### 単一カテゴリ
+#### 基本実行
 
 ```bash
-# 人気米国株での実行
+# build_config.yamlを用意して実行
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular \
+  --config build_config.yaml \
   --start 2024-01-01 \
   --end 2024-12-31 \
-  --output ./data/popular_2024.parquet
+  --output ./data/dataset_2024.parquet
+```
+
+#### 設定ファイル例 (`build_config.yaml`)
+
+```yaml
+# === 銘柄設定 ===
+symbol_category: ["popular"] # 銘柄カテゴリ指定
+# symbols: ["AAPL", "MSFT", "GOOGL"]  # または手動銘柄指定
+
+# === データ期間 === (CLIで上書き可能)
+# start_date: "2024-01-01"
+# end_date: "2024-12-31"
+interval: "1d"
+
+# === ターゲット設定 ===
+margin_pct: 0.01 # 方向判定マージン
+
+# === 前処理設定 ===
+winsorize_pct: 0.01 # 外れ値処理強度
+min_trading_days: 100 # 最小取引日数
+
+# === その他設定 ===
+output_path: "./data/dataset.parquet"
+validate_symbols: true
 ```
 
 #### 複数カテゴリの組み合わせ
 
-```bash
-# 人気株 + ETFの組み合わせ
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular etf \
-  --start 2024-01-01 \
-  --end 2024-12-31 \
-  --output ./data/mixed_portfolio_2024.parquet
-```
-
-#### 多様なポートフォリオ
-
-```bash
-# 米国株 + 日本株 + ETFの包括的ポートフォリオ
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular dow30 jp_major etf \
-  --start 2023-01-01 \
-  --end 2024-12-31 \
-  --min-days 50 \
-  --output ./data/global_portfolio.parquet
-```
-
-### パターン 2: 手動銘柄指定
-
-```bash
-# 特定銘柄のみ
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbols AAPL MSFT GOOGL AMZN NVDA \
-  --start 2024-01-01 \
-  --end 2024-12-31 \
-  --validate-symbols \
-  --output ./data/tech_giants_2024.parquet
-```
-
-### パターン 3: YAML 設定ファイル使用
-
-#### 設定ファイル作成例 (`config/build_config.yaml`)
-
 ```yaml
-# データセット構築設定
-symbols:
-  - AAPL
-  - MSFT
-  - GOOGL
-start_date: "2024-01-01"
-end_date: "2024-12-31"
-interval: "1d"
+# 多様なポートフォリオ設定例
+symbol_category: ["popular", "etf", "jp_major"]
 margin_pct: 0.01
-output_path: "./data/custom_dataset.parquet"
 winsorize_pct: 0.01
-min_trading_days: 100
+min_trading_days: 50
 validate_symbols: true
 ```
 
-#### 設定ファイルでの実行
+### パターン 2: 銘柄カテゴリ確認
 
 ```bash
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --config config/build_config.yaml
+# 利用可能な銘柄カテゴリを確認
+PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset --list-categories
 ```
 
 ## ⚙️ 主要オプション詳細
 
-### 🎯 銘柄選択オプション
+### 🎯 必須オプション
 
-| オプション          | 説明                 | 例                              |
-| ------------------- | -------------------- | ------------------------------- |
-| `--symbols`         | 手動銘柄指定         | `--symbols AAPL MSFT GOOGL`     |
-| `--symbol-category` | 事前定義カテゴリ選択 | `--symbol-category popular etf` |
-| `--list-categories` | カテゴリ一覧表示     | `--list-categories`             |
+| オプション | 説明              | 例                           |
+| ---------- | ----------------- | ---------------------------- |
+| `--config` | YAML 設定ファイル | `--config build_config.yaml` |
 
-### 📅 期間設定オプション
+### 📅 期間設定オプション（設定ファイルを上書き）
 
-| オプション   | 説明       | 形式       | 例                   |
-| ------------ | ---------- | ---------- | -------------------- |
-| `--start`    | 開始日     | YYYY-MM-DD | `--start 2024-01-01` |
-| `--end`      | 終了日     | YYYY-MM-DD | `--end 2024-12-31`   |
-| `--interval` | データ間隔 | 1d/1wk/1mo | `--interval 1d`      |
+| オプション | 説明   | 形式       | 例                   |
+| ---------- | ------ | ---------- | -------------------- |
+| `--start`  | 開始日 | YYYY-MM-DD | `--start 2024-01-01` |
+| `--end`    | 終了日 | YYYY-MM-DD | `--end 2024-12-31`   |
 
-### 🔧 前処理オプション
+### � 出力オプション
 
-| オプション    | 説明             | デフォルト | 例                 |
-| ------------- | ---------------- | ---------- | ------------------ |
-| `--margin`    | 上昇判定マージン | 0.01 (1%)  | `--margin 0.015`   |
-| `--winsorize` | 外れ値処理閾値   | 0.01 (1%)  | `--winsorize 0.02` |
-| `--min-days`  | 最小取引日数     | 100 日     | `--min-days 50`    |
+| オプション          | 説明                 | 例                                |
+| ------------------- | -------------------- | --------------------------------- |
+| `--output`          | 出力ファイルパス     | `--output ./data/dataset.parquet` |
+| `--list-categories` | 銘柄カテゴリ一覧表示 | `--list-categories`               |
 
-### ✅ 検証オプション
+### 🔧 設定ファイル内パラメータ
 
-| オプション           | 説明                     | デフォルト |
-| -------------------- | ------------------------ | ---------- |
-| `--validate-symbols` | 銘柄有効性検証           | True       |
-| `--no-validate`      | 検証スキップ（高速実行） | False      |
-
-### 📁 出力オプション
-
-| オプション  | 説明             | デフォルト                            |
-| ----------- | ---------------- | ------------------------------------- |
-| `--output`  | 出力ファイルパス | `./data/daily_ohlcv_features.parquet` |
-| `--verbose` | 詳細ログ出力     | False                                 |
+| パラメータ         | 説明             | デフォルト | 推奨範囲         |
+| ------------------ | ---------------- | ---------- | ---------------- |
+| `symbol_category`  | 銘柄カテゴリ     | -          | ["popular"]      |
+| `symbols`          | 手動銘柄指定     | []         | ["AAPL", "MSFT"] |
+| `margin_pct`       | 上昇判定マージン | 0.01       | 0.0-0.02         |
+| `winsorize_pct`    | 外れ値処理閾値   | 0.01       | 0.005-0.02       |
+| `min_trading_days` | 最小取引日数     | 100        | 50-200           |
+| `validate_symbols` | 銘柄有効性検証   | true       | true/false       |
 
 ## 🎯 実用的な使用ケース
 
 ### ケース 1: 日々のデータ更新
 
 ```bash
-# 前日までのデータで更新
-TODAY=$(date +%Y-%m-%d)
+# 設定ファイルで銘柄設定、CLIで期間指定
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular \
+  --config build_config.yaml \
   --start 2024-01-01 \
-  --end $TODAY \
+  --end $(date +%Y-%m-%d) \
   --output ./data/daily_update.parquet
 ```
 
 ### ケース 2: バックテスト用データ準備
 
+```yaml
+# backtest_config.yaml
+symbol_category: ["popular", "dow30"]
+margin_pct: 0.01
+min_trading_days: 200
+validate_symbols: true
+```
+
 ```bash
 # 長期間のバックテスト用データ
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular dow30 \
+  --config backtest_config.yaml \
   --start 2020-01-01 \
   --end 2024-12-31 \
-  --min-days 200 \
   --output ./data/backtest_5years.parquet
 ```
 
 ### ケース 3: 高速プロトタイピング
 
+```yaml
+# prototype_config.yaml
+symbol_category: ["popular"]
+margin_pct: 0.01
+min_trading_days: 20
+validate_symbols: false
+```
+
 ```bash
 # 検証なしで高速実行
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular \
+  --config prototype_config.yaml \
   --start 2024-10-01 \
   --end 2024-12-31 \
-  --no-validate \
-  --min-days 20 \
   --output ./data/prototype.parquet
 ```
 
 ### ケース 4: 特定セクター分析
 
+```yaml
+# tech_sector_config.yaml
+symbol_category: ["sp500_tech"]
+margin_pct: 0.02
+winsorize_pct: 0.005
+min_trading_days: 100
+```
+
 ```bash
 # テクノロジーセクター特化
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category sp500_tech \
+  --config tech_sector_config.yaml \
   --start 2024-01-01 \
   --end 2024-12-31 \
-  --margin 0.02 \
   --output ./data/tech_sector_2024.parquet
 ```
 
@@ -282,29 +274,31 @@ timestamp           symbol  open    high    low     close   next_ret  y_up  ret_
 export PYTHONPATH=./src
 ```
 
-#### 2. 銘柄データ取得失敗
+#### 2. 設定ファイルが見つからない
 
 ```bash
+# エラー: No such file or directory: 'build_config.yaml'
+# 対処: 設定ファイルの作成または正しいパス指定
+ls build_config.yaml  # ファイル存在確認
+```
+
+#### 3. 銘柄データ取得失敗
+
+```yaml
 # エラー: 有効な銘柄が見つかりませんでした
-# 対処: 銘柄コードの確認、または--no-validateオプション使用
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbols INVALID_SYMBOL \
-  --no-validate \
-  --start 2024-01-01 --end 2024-12-31
+# 対処: 設定ファイルでvalidate_symbolsをfalseに設定
+validate_symbols: false
 ```
 
-#### 3. 最小取引日数不足
+#### 4. 最小取引日数不足
 
-```bash
+```yaml
 # エラー: Final result is empty after preprocessing
-# 対処: --min-daysオプションで閾値を下げる
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular \
-  --start 2024-11-01 --end 2024-12-31 \
-  --min-days 10
+# 対処: min_trading_daysを下げる
+min_trading_days: 10
 ```
 
-#### 4. ファイル権限エラー
+#### 5. ファイル権限エラー
 
 ```bash
 # エラー: Permission denied
@@ -317,7 +311,7 @@ chmod 755 ./data
 
 ### 高速化のコツ
 
-1. **検証スキップ**: `--no-validate`で銘柄検証をスキップ
+1. **検証スキップ**: 設定ファイルで `validate_symbols: false`
 2. **期間短縮**: 必要最小限の期間に絞る
 3. **銘柄数制限**: 大量銘柄を避ける
 4. **並列実行**: 複数期間の場合は並列実行を検討
@@ -332,53 +326,45 @@ chmod 755 ./data
 
 ## 🔧 設定ファイル管理
 
-### 銘柄設定ファイル (`config/symbols.yaml`)
+### 設定ファイルテンプレート
 
-新しい銘柄カテゴリを追加する場合:
-
-```yaml
-symbol_categories:
-  custom_tech:
-    description: "カスタムテック銘柄"
-    symbols:
-      - symbol: "AAPL"
-        name: "Apple Inc."
-        sector: "Technology"
-      - symbol: "MSFT"
-        name: "Microsoft Corporation"
-        sector: "Technology"
-```
-
-### 実行設定テンプレート
-
-#### 本番環境用設定
+#### 本番環境用設定 (`production_config.yaml`)
 
 ```yaml
-# production_config.yaml
-symbols: [] # カテゴリ指定のため空
-start_date: "2023-01-01"
-end_date: "2024-12-31"
-interval: "1d"
+# 本番環境用データセット構築設定
+symbol_category: ["popular", "dow30"]
 margin_pct: 0.01
-output_path: "./data/production_dataset.parquet"
 winsorize_pct: 0.005
 min_trading_days: 150
 validate_symbols: true
+output_path: "./data/production_dataset.parquet"
+interval: "1d"
 ```
 
-#### 開発環境用設定
+#### 開発環境用設定 (`development_config.yaml`)
 
 ```yaml
-# development_config.yaml
-symbols: ["AAPL", "MSFT", "GOOGL"]
-start_date: "2024-10-01"
-end_date: "2024-12-31"
-interval: "1d"
+# 開発・実験用設定
+symbol_category: ["popular"]
 margin_pct: 0.015
-output_path: "./data/dev_dataset.parquet"
 winsorize_pct: 0.02
 min_trading_days: 20
 validate_symbols: false
+output_path: "./data/dev_dataset.parquet"
+interval: "1d"
+```
+
+#### 実験用設定 (`experiment_config.yaml`)
+
+```yaml
+# 実験パラメータ調整用
+symbol_category: ["popular"]
+margin_pct: 0.01 # ここを変更して実験
+winsorize_pct: 0.01 # ここを変更して実験
+min_trading_days: 100
+validate_symbols: true
+output_path: "./data/experiment_dataset.parquet"
+interval: "1d"
 ```
 
 ## 📋 チェックリスト
@@ -386,9 +372,9 @@ validate_symbols: false
 ### 実行前チェック
 
 - [ ] 環境変数 `PYTHONPATH=./src` が設定済み
+- [ ] **設定ファイル** (`build_config.yaml`) が存在し適切に設定済み
 - [ ] 出力ディレクトリが存在し、書き込み権限がある
 - [ ] 必要な銘柄カテゴリが設定ファイルに定義済み
-- [ ] 期間設定が適切（開始日 < 終了日）
 - [ ] インターネット接続が安定している（yfinance API 用）
 
 ### 実行後チェック
@@ -401,20 +387,28 @@ validate_symbols: false
 
 ## 🤝 サポート
 
-### ログの確認
-
-```bash
-# 詳細ログで実行
-PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset \
-  --symbol-category popular \
-  --start 2024-01-01 --end 2024-12-31 \
-  --verbose
-```
-
 ### ヘルプの表示
 
 ```bash
 PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset --help
+```
+
+### 設定ファイル例の確認
+
+```bash
+# 銘柄カテゴリ一覧を確認
+PYTHONPATH=./src uv run python -m daily_trade.scripts.build_dataset --list-categories
+
+# 設定ファイルサンプルを参考に作成
+cat > build_config.yaml << EOF
+symbol_category: ["popular"]
+margin_pct: 0.01
+winsorize_pct: 0.01
+min_trading_days: 100
+validate_symbols: true
+output_path: "./data/dataset.parquet"
+interval: "1d"
+EOF
 ```
 
 ---

@@ -1,5 +1,18 @@
 # daily_trade
 
+株価予測モデルの実験・開発フレームワーク
+
+## 📈 実験実行
+
+詳細な実験手順と記録は以下のドキュメントを参照：
+
+- [experiments/RESTART_GUIDE.md](experiments/RESTART_GUIDE.md) - **🔄 実験の中断・再開ガイド**
+- [experiments/STATUS.yaml](experiments/STATUS.yaml) - **📊 現在の実験進捗状況**
+- [experiments/EXPERIMENT_LOG.md](experiments/EXPERIMENT_LOG.md) - **実験記録とデータサイエンティストの分析観点**
+- [EXPERIMENT_OVERVIEW.md](EXPERIMENT_OVERVIEW.md) - 実験パラメータ仕様
+- [EXPERIMENT_FLOW.md](EXPERIMENT_FLOW.md) - 実行フロー
+- [EXPERIMENT_SYSTEM_PROMPT.md](EXPERIMENT_SYSTEM_PROMPT.md) - システム全体ドキュメント
+
 # 開発
 
 ## 準備

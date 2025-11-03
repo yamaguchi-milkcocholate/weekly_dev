@@ -1,0 +1,65 @@
+# 実験ステータス管理
+# 最終更新: 2025-11-03
+
+current_status:
+  active_experiment: "exp_001"
+  phase: "completed"
+  last_updated: "2025-11-03T14:52:45"
+  working_directory: "/Users/yamaguchiteppei/opt/post/weekly_dev/daily_trade"
+
+experiment_history:
+  exp_001:
+    status: "completed"
+    start_time: "2025-11-03T14:52:43"
+    end_time: "2025-11-03T14:52:45"
+    config_file: "config/exp_001_model_config.yaml"
+    output_files:
+      - "models/exp_001_model.pkl"
+      - "models/exp_001_model_report.json"
+    key_results:
+      cv_auc: 0.605
+      final_auc: 0.725
+      issues:
+        [
+          "early_stopping_too_early",
+          "cv_reliability_low",
+          "overfitting_concern",
+        ]
+    next_action: "exp_002_early_stopping_fix"
+
+experiment_queue:
+  exp_002:
+    status: "ready"
+    config_file: "config/exp_002_early_stopping_fix.yaml"
+    purpose: "Fix early stopping and improve CV reliability"
+    dependencies: ["exp_001"]
+    estimated_time: "5-10 minutes"
+
+  exp_003:
+    status: "planned"
+    purpose: "Feature expansion - technical indicators"
+    dependencies: ["exp_002"]
+
+  exp_004:
+    status: "planned"
+    purpose: "Hyperparameter optimization"
+    dependencies: ["exp_002"]
+
+paths:
+  experiment_log: "experiments/EXPERIMENT_LOG.md"
+  config_dir: "config/"
+  models_dir: "models/"
+  data_dir: "data/ohlcv/"
+
+environment:
+  python_path: "./src"
+  working_dir: "/Users/yamaguchiteppei/opt/post/weekly_dev/daily_trade"
+  required_commands:
+    - "cd /Users/yamaguchiteppei/opt/post/weekly_dev/daily_trade"
+    - "PYTHONPATH=./src"
+
+restart_guide:
+  step_1: "cd /Users/yamaguchiteppei/opt/post/weekly_dev/daily_trade"
+  step_2: "Check experiments/STATUS.yaml for current state"
+  step_3: "Review experiments/EXPERIMENT_LOG.md for latest results"
+  step_4: "Execute next experiment from experiment_queue"

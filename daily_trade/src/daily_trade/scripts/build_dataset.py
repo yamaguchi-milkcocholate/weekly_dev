@@ -393,73 +393,18 @@ Examples:
     )
 
     # 設定ファイル
-    parser.add_argument("--config", "-c", type=str, help="YAML設定ファイルパス")
+    parser.add_argument("--config", "-c", type=str, help="YAML設定ファイルパス", required=True)
 
     # データ取得設定
-    parser.add_argument(
-        "--symbols",
-        "-s",
-        type=str,
-        nargs="+",
-        help="銘柄コードリスト (例: AAPL MSFT GOOGL)",
-    )
-
-    parser.add_argument(
-        "--symbol-category",
-        type=str,
-        nargs="+",
-        choices=["popular", "dow30", "sp500_tech", "etf", "jp_major"],
-        help="事前定義された銘柄カテゴリから選択 (複数指定可能、--list-categories で一覧表示)",
-    )
-
     parser.add_argument(
         "--list-categories",
         action="store_true",
         help="利用可能な銘柄カテゴリを表示して終了",
     )
 
-    parser.add_argument(
-        "--validate-symbols",
-        action="store_true",
-        default=True,
-        help="yfinanceで銘柄の有効性を検証 (デフォルト: True)",
-    )
-
-    parser.add_argument(
-        "--no-validate",
-        action="store_true",
-        help="銘柄の有効性検証をスキップ",
-    )
-
     parser.add_argument("--start", type=str, help="開始日 (YYYY-MM-DD)")
 
     parser.add_argument("--end", type=str, help="終了日 (YYYY-MM-DD)")
-
-    parser.add_argument(
-        "--interval",
-        type=str,
-        default="1d",
-        choices=["1d", "1wk", "1mo"],
-        help="データ間隔 (デフォルト: 1d)",
-    )
-
-    # ターゲット設定
-    parser.add_argument(
-        "--margin",
-        type=float,
-        default=0.01,
-        help="上昇判定マージン (デフォルト: 0.01 = 1%%)",
-    )
-
-    # 前処理設定
-    parser.add_argument(
-        "--winsorize",
-        type=float,
-        default=0.01,
-        help="Winsorize閾値 (デフォルト: 0.01 = 1%%)",
-    )
-
-    parser.add_argument("--min-days", type=int, default=100, help="最小取引日数 (デフォルト: 100)")
 
     # 出力設定
     parser.add_argument(
@@ -469,9 +414,6 @@ Examples:
         help="出力ファイルパス (デフォルト: ./data/daily_ohlcv_features.parquet)",
     )
 
-    # ログ設定
-    parser.add_argument("--verbose", "-v", action="store_true", help="詳細ログ出力")
-
     args = parser.parse_args()
 
     try:
@@ -480,42 +422,31 @@ Examples:
             list_available_symbol_categories()
             return
 
-        # 設定読み込み
-        if args.config:
-            # YAML設定ファイルから読み込み
-            config = load_config_from_yaml(args.config)
-            symbols = config.get("symbols", [])
-            start_date = config.get("start_date")
-            end_date = config.get("end_date")
-            interval = config.get("interval", "1d")
-            margin_pct = config.get("margin_pct", 0.01)
-            output_path = config.get("output_path")
-            winsorize_pct = config.get("winsorize_pct", 0.01)
-            min_trading_days = config.get("min_trading_days", 100)
-            validate_symbols = config.get("validate_symbols", True)
-        else:
-            # CLI引数から読み込み
-            symbols = args.symbols
-            start_date = args.start
-            end_date = args.end
-            interval = args.interval
-            margin_pct = args.margin
-            output_path = args.output
-            winsorize_pct = args.winsorize
-            min_trading_days = args.min_days
-            validate_symbols = args.validate_symbols and not args.no_validate
+        # YAML設定ファイルから読み込み
+        config = load_config_from_yaml(args.config)
+        symbols = config.get("symbols", [])
+        symbol_category = config.get("symbol_category", "")
+        interval = config.get("interval", "1d")
+        margin_pct = config.get("margin_pct", 0.01)
+        output_path = config.get("output_path")
+        winsorize_pct = config.get("winsorize_pct", 0.01)
+        min_trading_days = config.get("min_trading_days", 100)
+        validate_symbols = config.get("validate_symbols", True)
+
+        start_date = args.start
+        end_date = args.end
 
         # 銘柄リストの決定
-        if args.symbol_category:
+        if symbol_category:
             # 事前定義カテゴリから取得
-            if len(args.symbol_category) == 1:
+            if len(symbol_category) == 1:
                 # 単一カテゴリ
-                symbols = get_predefined_symbols(args.symbol_category[0])
-                print(f"📋 銘柄カテゴリ '{args.symbol_category[0]}' から {len(symbols)} 銘柄を選択")
+                symbols = get_predefined_symbols(symbol_category[0])
+                print(f"📋 銘柄カテゴリ '{symbol_category[0]}' から {len(symbols)} 銘柄を選択")
             else:
                 # 複数カテゴリ
-                symbols = get_symbols_from_categories(args.symbol_category)
-                category_list = ", ".join(args.symbol_category)
+                symbols = get_symbols_from_categories(symbol_category)
+                category_list = ", ".join(symbol_category)
                 print(f"📋 銘柄カテゴリ [{category_list}] から {len(symbols)} 銘柄を選択")
                 print(f"   (重複除去後の最終銘柄数: {len(symbols)})")
         elif not symbols:
