@@ -170,7 +170,7 @@ def train_model(
 
         # 5. モデル学習
         logger.info("モデル学習開始...")
-        n_estimators = math.floor(pd.Series(cv_scores["best_iteration"]).max())
+        n_estimators = math.floor(pd.Series(cv_scores["best_iteration"]).median())
         model.fit(x, y, n_estimators=n_estimators)
 
         # 6. モデル評価

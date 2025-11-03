@@ -102,6 +102,7 @@ class DirectionModel:
             reg_lambda=self.config.reg_lambda,
             random_state=self.config.random_state,
             n_estimators=n_estimators,
+            importance_type="gain",
         )
 
         # 学習実行
@@ -230,6 +231,7 @@ class DirectionModel:
                 reg_lambda=self.config.reg_lambda,
                 random_state=self.config.random_state,
                 n_estimators=self.config.n_estimators,
+                importance_type="gain",
                 verbose=-1,
             )
 
