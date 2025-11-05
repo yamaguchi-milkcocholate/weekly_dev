@@ -356,11 +356,11 @@ class FeatureBuilder:
         # Day of week (0=Monday, 6=Sunday)
         df["dow"] = df["timestamp"].dt.weekday
 
-        # Month (1-12)
-        df["month"] = df["timestamp"].dt.month
+        # Month (1-12) 非定常のため廃止
+        # df["month"] = df["timestamp"].dt.month
 
-        # Quarter (1-4)
-        df["quarter"] = df["timestamp"].dt.quarter
+        # Quarter (1-4) 非定常のため廃止
+        # df["quarter"] = df["timestamp"].dt.quarter
 
         # Day of month (1-31)
         df["day_of_month"] = df["timestamp"].dt.day

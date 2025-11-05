@@ -5,7 +5,6 @@ TimeSeriesSplitによる交差検証でモデルの汎化性能を評価しま�
 """
 
 from copy import deepcopy
-from dataclasses import dataclass
 from pathlib import Path
 import pickle
 from typing import Optional, Union
@@ -13,39 +12,48 @@ from typing import Optional, Union
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, Field
 from sklearn.metrics import accuracy_score, average_precision_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 
 from .utils.logger import AppLogger
 
 
-@dataclass
-class ModelConfig:
+class ModelConfig(BaseModel):
     """DirectionModel設定."""
 
     # LightGBMパラメータ
-    num_leaves: int = 31
-    learning_rate: float = 0.05
-    feature_fraction: float = 0.8
-    bagging_fraction: float = 0.8
-    bagging_freq: int = 5
-    min_child_samples: int = 20
-    reg_alpha: float = 0.1
-    reg_lambda: float = 0.1
-    random_state: int = 42
-    n_estimators: int = 100
-    early_stopping_rounds: int = 10
+    class LightGBMParams(BaseModel):
+        num_leaves: int = Field(default=31, description="LightGBMの葉ノード数")
+        learning_rate: float = Field(default=0.05, description="学習率")
+        feature_fraction: float = Field(default=0.8, description="特徴量サンプリング率")
+        bagging_fraction: float = Field(default=0.8, description="データサンプリング率")
+        bagging_freq: int = Field(default=5, description="バギング頻度")
+        min_child_samples: int = Field(default=20, description="子ノードの最小サンプル数")
+        reg_alpha: float = Field(default=0.1, description="L1正則化パラメータ")
+        reg_lambda: float = Field(default=0.1, description="L2正則化パラメータ")
+        random_state: int = Field(default=42, description="乱数シード")
+        n_estimators: int = Field(default=100, description="推定器数")
+        early_stopping_rounds: int = Field(default=10, description="早期停止ラウンド数")
+
+    light_gbm_params: LightGBMParams = Field(default_factory=LightGBMParams, description="LightGBMパラメータ")
 
     # 交差検証
-    cv_splits: int = 5
-    test_size_ratio: float = 0.2
+    cv_splits: int = Field(default=5, description="交差検証の分割数")
+    test_size_ratio: float = Field(default=0.2, description="テストサイズ比率")
 
     # 評価
-    pos_label: int = 1
-    average: str = "binary"
+    pos_label: int = Field(default=1, description="ポジティブラベル")
+    average: str = Field(default="binary", description="平均化方法")
 
     # ファイル保存
-    model_file: str = "model.pkl"
+    model_file: str = Field(default="model.pkl", description="モデルファイル名")
+
+    class Config:
+        """Pydantic設定."""
+
+        extra = "forbid"  # 未定義フィールドを禁止
+        validate_assignment = True  # 代入時バリデーション
 
 
 class DirectionModel:
@@ -89,21 +97,9 @@ class DirectionModel:
             X = X.ffill().fillna(0)  # 前方補完 → 0埋め
 
         # LightGBMモデル構築
-        self.model = lgb.LGBMClassifier(
-            objective="binary",
-            metric="auc",
-            num_leaves=self.config.num_leaves,
-            learning_rate=self.config.learning_rate,
-            feature_fraction=self.config.feature_fraction,
-            bagging_fraction=self.config.bagging_fraction,
-            bagging_freq=self.config.bagging_freq,
-            min_child_samples=self.config.min_child_samples,
-            reg_alpha=self.config.reg_alpha,
-            reg_lambda=self.config.reg_lambda,
-            random_state=self.config.random_state,
-            n_estimators=n_estimators,
-            importance_type="gain",
-        )
+        lgb_params = self.config.light_gbm_params.model_dump()
+        lgb_params["n_estimators"] = n_estimators
+        self.model = lgb.LGBMClassifier(objective="binary", metric="auc", **lgb_params, importance_type="gain")
 
         # 学習実行
         self.model.fit(
@@ -112,7 +108,7 @@ class DirectionModel:
             # 同じオブジェクトを渡すとvalid aucが計算されないため、deepcopyで回避
             eval_set=[(deepcopy(X), deepcopy(y))],
             callbacks=[
-                lgb.early_stopping(self.config.early_stopping_rounds),
+                lgb.early_stopping(lgb_params["early_stopping_rounds"]),
                 lgb.log_evaluation(1),
             ],
         )
@@ -220,21 +216,9 @@ class DirectionModel:
             symbol_val = symbols.iloc[val_idx]
 
             # モデル学習
+            lgb_params = self.config.light_gbm_params.model_dump()
             fold_model = lgb.LGBMClassifier(
-                objective="binary",
-                metric="auc",
-                num_leaves=self.config.num_leaves,
-                learning_rate=self.config.learning_rate,
-                feature_fraction=self.config.feature_fraction,
-                bagging_fraction=self.config.bagging_fraction,
-                bagging_freq=self.config.bagging_freq,
-                min_child_samples=self.config.min_child_samples,
-                reg_alpha=self.config.reg_alpha,
-                reg_lambda=self.config.reg_lambda,
-                random_state=self.config.random_state,
-                n_estimators=self.config.n_estimators,
-                importance_type="gain",
-                verbose=-1,
+                objective="binary", metric="auc", **lgb_params, importance_type="gain", verbose=-1
             )
 
             fold_model.fit(
@@ -242,7 +226,7 @@ class DirectionModel:
                 y_train,
                 eval_set=[(X_val, y_val)],
                 callbacks=[
-                    lgb.early_stopping(self.config.early_stopping_rounds),
+                    lgb.early_stopping(lgb_params["early_stopping_rounds"]),
                     lgb.log_evaluation(0),
                 ],
             )

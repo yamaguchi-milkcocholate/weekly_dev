@@ -261,12 +261,7 @@ Examples:
 
     # モデル設定
     model_params = config.get("model_params", {})
-    model_config = ModelConfig(
-        num_leaves=model_params.get("num_leaves", 31),
-        learning_rate=model_params.get("learning_rate", 0.05),
-        n_estimators=model_params.get("n_estimators", 100),
-        cv_splits=cv_splits,
-    )
+    model_config = ModelConfig(light_gbm_params=model_params, cv_splits=cv_splits)
 
     save_report = not config.get("no_report", False)
 
