@@ -17,6 +17,7 @@ from typing import Optional
 import pandas as pd
 import yaml
 
+from daily_trade.feature_engineering import AdvancedFeatureEngineer, FeatureSelector
 from daily_trade.model_direction import DirectionModel, ModelConfig
 from daily_trade.utils.logger import AppLogger
 
@@ -49,17 +50,47 @@ def load_dataset(file_path: str) -> tuple[pd.DataFrame, list[str]]:
     return df, feature_columns
 
 
-def prepare_model_data(df: pd.DataFrame, feature_cols: list[str]) -> tuple[pd.DataFrame, pd.Series]:
+def prepare_model_data(
+    df: pd.DataFrame, feature_cols: list[str], config: Optional[dict] = None
+) -> tuple[pd.DataFrame, pd.Series]:
     """モデル学習用データを準備."""
     logger = AppLogger()
+
+    # 特徴量工学の適用
+    if config and "feature_engineering" in config:
+        logger.info("特徴量工学を適用中...")
+
+        # Advanced Feature Engineering
+        feature_engineer = AdvancedFeatureEngineer(config["feature_engineering"])
+        df = feature_engineer.engineer_features(df)
+
+        # Feature Selection
+        if "feature_selection" in config:
+            feature_selector = FeatureSelector(config["feature_selection"])
+            # 新しく生成された特徴量も含めて選択
+            all_features = [
+                col for col in df.columns if col not in ["timestamp", "symbol", "y_up", "contains_leading_nan"]
+            ]
+            feature_cols = feature_selector.select_features(df, all_features)
+            logger.info(f"特徴量選択後: {len(feature_cols)} features")
 
     df = df.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
     num_drops = df["contains_leading_nan"].sum()
     logger.info(f"先頭欠損行数: {num_drops} / {len(df)}")
 
+    # 使用可能な特徴量のみ抽出
+    available_features = [f for f in feature_cols if f in df.columns]
+    if len(available_features) < len(feature_cols):
+        missing = set(feature_cols) - set(available_features)
+        logger.warning(f"欠損特徴量: {missing}")
+        feature_cols = available_features
+
     x = df.loc[~df["contains_leading_nan"], feature_cols].copy()
     y = df.loc[~df["contains_leading_nan"], "y_up"].copy()
     symbol = df.loc[~df["contains_leading_nan"], "symbol"].copy()
+
+    # symbolを特徴量として追加
+    x["symbol"] = symbol
 
     # symbolをカテゴリ変数として処理
     # symbolをカテゴリ型に変換
@@ -140,6 +171,7 @@ def train_model(
     model_config: Optional[ModelConfig] = None,
     cv_splits: int = 3,
     save_report: bool = True,
+    config: Optional[dict] = None,
 ) -> str:
     """モデル学習メイン処理.
 
@@ -149,7 +181,7 @@ def train_model(
         model_config: モデル設定
         cv_splits: 交差検証分割数
         save_report: 評価レポート保存フラグ
-        include_symbol: 銘柄をカテゴリ変数として特徴量に含めるか
+        config: 特徴量工学設定を含む全体設定
 
     Returns:
         出力モデルパス
@@ -161,8 +193,8 @@ def train_model(
         # 1. データセット読み込み
         df, feature_columns = load_dataset(input_path)
 
-        # 2. モデル学習用データ準備
-        x, y, symbols = prepare_model_data(df, feature_columns)
+        # 2. モデル学習用データ準備（特徴量工学を含む）
+        x, y, symbols = prepare_model_data(df, feature_columns, config)
 
         # 3. モデル設定
         if model_config is None:
@@ -272,6 +304,7 @@ Examples:
         model_config=model_config,
         cv_splits=cv_splits,
         save_report=save_report,
+        config=config,
     )
 
     print(f"✅ モデル学習完了: {model_file}")

@@ -2,9 +2,9 @@
 # 最終更新: 2025-11-03
 
 current_status:
-  active_experiment: "exp_001"
+  active_experiment: "exp_002"
   phase: "completed"
-  last_updated: "2025-11-03T14:52:45"
+  last_updated: "2025-11-03T15:13:25"
   working_directory: "/Users/yamaguchiteppei/opt/post/weekly_dev/daily_trade"
 
 experiment_history:
@@ -26,6 +26,22 @@ experiment_history:
           "overfitting_concern",
         ]
     next_action: "exp_002_early_stopping_fix"
+
+  exp_002:
+    status: "completed"
+    start_time: "2025-11-03T15:13:22"
+    end_time: "2025-11-03T15:13:25"
+    config_file: "config/exp_002_early_stopping_fix.yaml"
+    output_files:
+      - "models/exp_002_model.pkl"
+      - "models/exp_002_model_report.json"
+    key_results:
+      cv_auc: 0.617
+      final_auc: 0.748
+      improvements:
+        ["early_stopping_normalized", "cv_auc_improved", "final_auc_improved"]
+      remaining_issues: ["cv_final_gap_large", "precision_recall_zero_folds"]
+    next_action: "exp_003_regularization_or_feature_engineering"
 
 experiment_queue:
   exp_002:

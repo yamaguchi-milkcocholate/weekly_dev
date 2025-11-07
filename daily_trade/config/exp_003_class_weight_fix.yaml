@@ -1,0 +1,34 @@
+# 実験003: クラス重み調整による根本対策
+# 目的: 極端に保守的な予測確率の改善
+
+# 入出力設定
+input_path: "./data/ohlcv/latest_dataset.parquet"
+output_path: "./models/exp_003_model.pkl"
+
+# 交差検証設定
+cv_splits: 5
+
+# LightGBMモデル設定
+model_params:
+  num_leaves: 31
+  learning_rate: 0.05
+  n_estimators: 500
+  feature_fraction: 0.9
+  bagging_fraction: 0.8
+  bagging_freq: 5
+  min_child_samples: 20
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 42
+  early_stopping_rounds: 50
+
+  # 根本対策: クラス重み調整
+  class_weight: "balanced" # 自動でクラス重みを調整
+
+# 出力設定
+no_report: false
+# 実験仮説:
+# - class_weight="balanced"により正例率の低さを補正
+# - モデルがより積極的に正例を予測するようになる
+# - 予測確率の分布が0.5付近まで拡張される
+# - Precision/Recall = 0 問題の根本解決

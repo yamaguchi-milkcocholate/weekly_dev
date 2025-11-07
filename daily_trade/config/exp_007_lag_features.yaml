@@ -1,0 +1,117 @@
+# 実験007: ラグ特徴量導入実験
+# LightGBMベースを維持しながら時系列要素を強化
+
+# 入出力設定
+input_path: "data/ohlcv/latest_dataset.parquet"
+output_path: "models/exp_007_lag_features.pkl"
+cv_splits: 5
+
+# モデル設定（実験006の正則化設定継続）
+model_params:
+  # 基本パラメータ
+  n_estimators: 300
+  learning_rate: 0.03
+
+  # 過学習抑制パラメータ
+  max_depth: 3
+  num_leaves: 10
+  min_child_samples: 100
+  subsample: 0.7
+  colsample_bytree: 0.7
+
+  # 正則化パラメータ
+  reg_alpha: 0.3
+  reg_lambda: 0.3
+
+  # 追加の正則化
+  min_split_gain: 0.1
+  min_child_weight: 0.1
+
+  # その他
+  random_state: 42
+  early_stopping_rounds: 30
+  verbose: -1
+
+# 特徴量工学設定
+feature_engineering:
+  # ★ 新機能: ラグ特徴量
+  lag_features:
+    features:
+      # 価格・リターン系
+      - "ret_1d"
+      - "ret_5d"
+      - "ret_10d"
+      # ボラティリティ系
+      - "atr_pct_14"
+      - "stdev_20"
+      # モメンタム系
+      - "rsi_14"
+      - "macd"
+      - "macd_hist"
+      # 出来高系
+      - "vol_ratio_20"
+      - "tov_ratio_20"
+    periods: [1, 2, 3, 5] # 1,2,3,5日前の値
+
+    # ローリング統計
+    rolling_stats: true
+    rolling_windows: [3, 5, 10] # 3,5,10日ウィンドウ
+
+    # モメンタム特徴量（変化率）
+    momentum_features: true
+    momentum_periods: [2, 5, 10] # 2,5,10日前からの変化率
+
+  # 既存の相互作用項（効果的なもの継続）
+  interaction_features:
+    - ["atr_pct_14", "rsi_14"]
+    - ["stdev_20", "ret_1d"]
+    - ["bb_width_20", "macd"]
+    - ["vol_ratio_20", "ret_5d"]
+    - ["tov_ratio_20", "bb_pband_20"]
+    - ["dow", "atr_pct_14"]
+
+  # 非線形変換（効果的なもの継続）
+  nonlinear_transforms:
+    log_features:
+      - "atr_pct_14"
+      - "vol_ratio_20"
+      - "tov_ratio_20"
+    sqrt_features:
+      - "stdev_20"
+      - "bb_width_20"
+    rank_features:
+      - "ret_1d"
+      - "ret_5d"
+      - "ret_10d"
+
+  # ドメイン知識特徴量（効果的なもの継続）
+  domain_features:
+    momentum_strength: true
+    volatility_regime: true
+    trend_consistency: true
+    volume_spike: true
+    oversold_oversold: true
+    overbought: true
+    technical_score: true
+    risk_score: true
+
+# 特徴量選択設定
+feature_selection:
+  # 除外特徴量（擬似相関除去継続）
+  exclude_features:
+    - "month"
+    - "quarter"
+    - "contains_leading_nan"
+    - "next_ret"
+    - "day_of_month" # 擬似相関除去
+
+  # 相関フィルタリング
+  correlation_threshold: 0.90
+
+  # 重要度フィルタリング
+  importance_threshold: 0.001
+
+# ログ設定
+logging:
+  level: "INFO"
+  log_file: "logs/exp_007_lag_features.log"

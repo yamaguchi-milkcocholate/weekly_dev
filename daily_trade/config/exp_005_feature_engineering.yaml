@@ -1,0 +1,98 @@
+# 実験005: 特徴量工学による組み合わせ効果改善
+
+# 入出力設定
+input_path: "data/ohlcv/latest_dataset.parquet"
+output_path: "models/exp_005_model.pkl"
+cv_splits: 5
+
+# モデル設定 (過学習抑制を強化)
+model_params:
+  # 基本パラメータ
+  n_estimators: 500
+  learning_rate: 0.05
+
+  # 過学習抑制パラメータ (強化)
+  max_depth: 4
+  num_leaves: 15
+  min_child_samples: 50
+  subsample: 0.8
+  colsample_bytree: 0.8
+
+  # 正則化パラメータ (新規追加)
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+
+  # その他
+  random_state: 42
+  early_stopping_rounds: 50
+  verbose: -1
+
+# 特徴量工学設定 (新規追加)
+feature_engineering:
+  # 相互作用項 (金融理論に基づく組み合わせ)
+  interaction_features:
+    # ボラティリティ × モメンタム
+    - ["atr_pct_14", "rsi_14"] # 変動率とRSIの相互作用
+    - ["stdev_20", "ret_1d"] # 標準偏差と短期リターン
+    - ["bb_width_20", "macd"] # ボリンジャーバンド幅とMACD
+
+    # ボリューム × 価格
+    - ["vol_ratio_20", "ret_5d"] # 出来高比率と中期リターン
+    - ["tov_ratio_20", "bb_pband_20"] # 売買代金比率とボリンジャー位置
+
+    # 時系列 × 技術指標
+    - ["dow", "atr_pct_14"] # 曜日効果とボラティリティ
+
+  # 非線形変換
+  nonlinear_transforms:
+    # 対数変換 (裾の長い分布を正規化)
+    log_features:
+      - "atr_pct_14"
+      - "vol_ratio_20"
+      - "tov_ratio_20"
+
+    # 平方根変換 (ボラティリティ系)
+    sqrt_features:
+      - "stdev_20"
+      - "bb_width_20"
+
+    # ランク変換 (外れ値耐性)
+    rank_features:
+      - "ret_1d"
+      - "ret_5d"
+      - "ret_10d"
+
+  # ドメイン知識特徴量
+  domain_features:
+    # 金融理論ベース
+    momentum_strength: true # モメンタム強度 = |rsi_14 - 50|
+    volatility_regime: true # ボラティリティ局面 = atr_pct_14のランク
+    trend_consistency: true # トレンド一貫性 = slope方向とmacd方向の一致
+    volume_spike: true # 出来高急増 = vol_ratio_20 > 2.0
+    oversold_oversold: true # 売られすぎ = rsi_14 < 30
+    overbought: true # 買われすぎ = rsi_14 > 70
+
+    # 複合指標
+    technical_score: true # 技術指標総合スコア
+    risk_score: true # リスクスコア (ボラティリティ関連)
+
+# 特徴量選択設定
+feature_selection:
+  # 除外特徴量 (非定常・低予測力・情報漏洩・擬似相関)
+  exclude_features:
+    - "month" # 非定常
+    - "quarter" # 非定常
+    - "contains_leading_nan" # 非定常
+    - "next_ret" # 情報漏洩（未来の情報）
+    - "day_of_month" # 擬似相関の可能性
+
+  # 相関フィルタリング
+  correlation_threshold: 0.95 # 0.95以上の相関がある特徴量は片方を除去
+
+  # 重要度フィルタリング
+  importance_threshold: 0.001 # 重要度が閾値以下の特徴量を除去
+
+# ログ設定
+logging:
+  level: "INFO"
+  log_file: "logs/exp_005_feature_engineering.log"
