@@ -1,0 +1,50 @@
+[project]
+name = "sns-ai-automation-agency"
+version = "0.1.0"
+description = "エリア紹介ショート動画自動生成システム"
+authors = [
+    {name = "yamaguchi-milkcocholate"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.5.0",
+    "python-dotenv>=1.0.0",
+    "jupyterlab>=4.0.0",
+    "ipykernel>=6.25.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+]
+storage = [
+    "google-cloud-storage>=2.10.0",
+    "boto3>=1.29.0",
+]
+media = [
+    "ffmpeg-python>=0.2.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sns_ai_automation_agency"]
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
