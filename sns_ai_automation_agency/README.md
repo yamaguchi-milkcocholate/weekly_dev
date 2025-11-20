@@ -135,7 +135,7 @@ sns_ai_automation_agency/
 
 ### Phase 1: 実験・検証 (現在)
 
-1. Perplexity API による素材抽出ロジック検証
+1. 素材抽出ロジック検証
 2. テロップ生成アルゴリズム調整
 3. スライド構成の最適化
 
@@ -173,6 +173,14 @@ source ~/.bashrc  # または ~/.zshrc
 # 依存関係を再インストール
 uv sync --reinstall
 uv run jupyter lab --version
+```
+
+## コマンド
+
+### 調査を実施
+
+```shell
+uv run sns-agent survey --station 横浜 --thread-id test
 ```
 
 ## ライセンス

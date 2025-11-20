@@ -46,6 +46,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sns_ai_automation_agency"]
 
+[project.scripts]
+sns-agent = "sns_ai_automation_agency.cli:main"
+
 [tool.black]
 line-length = 120
 target-version = ['py311']
