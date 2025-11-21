@@ -1,5 +1,6 @@
 from sns_ai_automation_agency.agent.access import survey_access_information
 from sns_ai_automation_agency.agent.restaurant import survey_restaurant_information
+from sns_ai_automation_agency.agent.scene import run_scene_agent
 
 
 def run_master_agent(
@@ -17,7 +18,12 @@ def run_master_agent(
         thread_id=thread_id,
     )
 
+    scene_data = run_scene_agent(
+        restaurant_info=restaurant_data, access_info=access_data, thread_id=thread_id, station_name=station_name
+    )
+
     return {
         "access_data": access_data,
         "restaurant_data": restaurant_data,
+        "scene_data": scene_data,
     }
