@@ -12,6 +12,8 @@ class Scene(BaseModel):
     content: str = Field(..., description="シーンの内容")
     telop: str = Field(..., description="シーンのテロップ")
     image_search_query: str = Field(..., description="画像検索クエリ")
+    start_sec: float = Field(..., description="シーン開始秒数")
+    end_sec: float = Field(..., description="シーン終了秒数")
 
 
 class MovieResponse(BaseModel):

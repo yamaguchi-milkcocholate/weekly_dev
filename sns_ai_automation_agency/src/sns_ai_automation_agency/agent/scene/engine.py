@@ -9,7 +9,9 @@ import sns_ai_automation_agency.agent.scene.schema as schema
 import sns_ai_automation_agency.utils as utils
 
 
-def run_scene_agent(restaurant_info: dict, access_info: dict, thread_id: str = None, station_name: str = None) -> dict:
+def run_scene_agent(
+    restaurant_info: dict, access_info: dict, total_seconds: int, thread_id: str = None, station_name: str = None
+) -> dict:
     load_dotenv()
 
     if thread_id:
@@ -26,9 +28,11 @@ def run_scene_agent(restaurant_info: dict, access_info: dict, thread_id: str = N
     restaurant_json = json.dumps(restaurant_info, indent=2, ensure_ascii=False).replace("{", "{{").replace("}", "}}")
 
     system_prompt = prompt.get_systemprompt()
-    user_prompt = prompt.get_userprompt(access_json=access_json, restaurant_json=restaurant_json)
+    user_prompt = prompt.get_userprompt(
+        access_json=access_json, restaurant_json=restaurant_json, total_seconds=total_seconds
+    )
 
-    scene_llm = ChatOpenAI(model="gpt-5.1", temperature=0)
+    scene_llm = ChatOpenAI(model="gpt-5.1", temperature=0, reasoning_effort="high")
     scene_llm = scene_llm.with_structured_output(schema.MovieResponse)
     scene_prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("user", user_prompt)])
 

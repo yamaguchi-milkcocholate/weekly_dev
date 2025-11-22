@@ -4,7 +4,7 @@ from sns_ai_automation_agency.agent.scene import run_scene_agent
 
 
 def run_master_agent(
-    station_name: str, num_highlight_stations: int, num_iterations: int, thread_id: str = None
+    station_name: str, num_highlight_stations: int, num_iterations: int, total_seconds: int, thread_id: str = None
 ) -> dict:
     access_data = survey_access_information(
         station_name=station_name,
@@ -19,7 +19,11 @@ def run_master_agent(
     )
 
     scene_data = run_scene_agent(
-        restaurant_info=restaurant_data, access_info=access_data, thread_id=thread_id, station_name=station_name
+        restaurant_info=restaurant_data,
+        access_info=access_data,
+        total_seconds=total_seconds,
+        station_name=station_name,
+        thread_id=thread_id,
     )
 
     return {

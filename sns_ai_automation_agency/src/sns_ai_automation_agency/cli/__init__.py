@@ -17,7 +17,7 @@ def main():
   sns-agent survey --station 渋谷
 
   # パラメータを指定
-  sns-agent survey --station 新宿 --highlight-stations 3 --iterations 2
+  sns-agent survey --station 新宿 --highlight-stations 3 --iterations 2 --total_seconds 15
 
   # 結果をファイルに保存
   sns-agent survey --station 池袋 --output result.json
@@ -57,6 +57,13 @@ def main():
         help="飲食店調査の最大反復回数（デフォルト: 2）",
     )
     survey_parser.add_argument(
+        "--total-seconds",
+        "-ts",
+        type=int,
+        default=15,
+        help="動画全体の秒数（デフォルト: 15）",
+    )
+    survey_parser.add_argument(
         "--thread-id",
         "-t",
         type=str,
@@ -91,6 +98,7 @@ def run_survey(args):
     print(f"📍 対象駅: {args.station}")
     print(f"🔢 強調駅数: {args.highlight_stations}")
     print(f"🔄 調査反復数: {args.iterations}")
+    print(f"⏱️ 動画全体秒数: {args.total_seconds}")
     if args.thread_id:
         print(f"🆔 スレッドID: {args.thread_id}")
     print("=" * 60)
@@ -101,6 +109,7 @@ def run_survey(args):
             station_name=args.station,
             num_highlight_stations=args.highlight_stations,
             num_iterations=args.iterations,
+            total_seconds=args.total_seconds,
             thread_id=args.thread_id,
         )
 
