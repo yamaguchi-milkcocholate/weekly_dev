@@ -22,6 +22,10 @@ async def search_google_images_async(query: str, count: int = 10) -> List[Dict[s
         "num": count,
         "safe": "active",
         "imgType": "photo",
+        "gl": "jp",  # 地域を日本に設定
+        "hl": "ja",  # 言語を日本語に設定
+        "lr": "lang_ja",  # 検索結果を日本語に制限
+        "filter": "0",  # 重複フィルタを無効化（より多くの結果）
     }
 
     async with httpx.AsyncClient() as client:

@@ -12,12 +12,13 @@ import sns_ai_automation_agency.agent.thumbnail.search as search
 import sns_ai_automation_agency.utils as utils
 
 
-async def run_thumbnail_agent_async(scene_data: dict, count: int, max_concurrent: int = 5) -> dict:
+async def run_thumbnail_agent_async(scene_data: dict, station_name: str, count: int, max_concurrent: int = 5) -> dict:
     """
     サムネイル画像検索クエリを非同期生成
 
     Args:
         scene_data: シーンデータ
+        station_name: 駅名
         count: 画像検索で取得する画像数
         max_concurrent: 最大同時実行数（デフォルト: 5）
 
@@ -38,7 +39,7 @@ async def run_thumbnail_agent_async(scene_data: dict, count: int, max_concurrent
             title = scene["title"]
             content = scene["content"]
             telop = scene["telop"]
-            user_prompt = prompt.get_user_prompt(title=title, content=content, telop=telop)
+            user_prompt = prompt.get_user_prompt(station_name=station_name, title=title, content=content, telop=telop)
 
             llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
             llm = llm.with_structured_output(schema.SearchQueryResponse)
@@ -87,7 +88,11 @@ def run_thumbnail_agent(
     else:
         cache, cache_file = None, None
 
-    result = asyncio.run(run_thumbnail_agent_async(scene_data=scene_data, count=count, max_concurrent=max_concurrent))
+    result = asyncio.run(
+        run_thumbnail_agent_async(
+            scene_data=scene_data, station_name=station_name, count=count, max_concurrent=max_concurrent
+        )
+    )
 
     result_dict = utils.to_serializable(result)
 

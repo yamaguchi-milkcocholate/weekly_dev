@@ -52,8 +52,9 @@ def get_system_prompt() -> str:
     return system_prompt
 
 
-def get_user_prompt(title: str, content: str, telop: str) -> str:
+def get_user_prompt(station_name: str, title: str, content: str, telop: str) -> str:
     user_prompt = f"""
+  "station_name": {station_name}駅,
   "title": {title},
   "content": {content},
   "telop": {telop}
