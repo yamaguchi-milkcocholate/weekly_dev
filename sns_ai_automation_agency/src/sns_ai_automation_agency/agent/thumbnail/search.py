@@ -1,19 +1,18 @@
+import asyncio
 import os
 from typing import Any, Dict, List
 
-import requests
+import httpx
 from dotenv import load_dotenv
 
 
-def search_station_sign_images(station_name: str, count: int = 10) -> List[Dict[str, Any]]:
-    """駅名を受け取り、駅名標っぽい画像候補を返す"""
+async def search_google_images_async(query: str, count: int = 10) -> List[Dict[str, Any]]:
+    """駅名を受け取り、駅名標っぽい画像候補を返す（非同期版）"""
     load_dotenv()
 
     GOOGLE_API_KEY = os.environ["GOOGLE_CUSTOM_SEARCH_API_KEY"]
     GOOGLE_CX = os.environ["GOOGLE_CUSTOM_SEARCH_CX"]
     GOOGLE_ENDPOINT = "https://www.googleapis.com/customsearch/v1"
-
-    query = f"{station_name}駅 駅名標 写真"
 
     params = {
         "key": GOOGLE_API_KEY,
@@ -25,9 +24,10 @@ def search_station_sign_images(station_name: str, count: int = 10) -> List[Dict[
         "imgType": "photo",
     }
 
-    res = requests.get(GOOGLE_ENDPOINT, params=params)
-    res.raise_for_status()
-    data = res.json()
+    async with httpx.AsyncClient() as client:
+        res = await client.get(GOOGLE_ENDPOINT, params=params)
+        res.raise_for_status()
+        data = res.json()
 
     items = data.get("items", [])
     if not items:
@@ -52,3 +52,8 @@ def search_station_sign_images(station_name: str, count: int = 10) -> List[Dict[
         )
 
     return result
+
+
+def search_google_images(query: str, count: int = 10) -> List[Dict[str, Any]]:
+    """駅名を受け取り、駅名標っぽい画像候補を返す（同期版・後方互換性のため）"""
+    return asyncio.run(search_google_images_async(query, count))

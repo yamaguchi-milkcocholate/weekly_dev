@@ -10,7 +10,11 @@ import sns_ai_automation_agency.utils as utils
 
 
 def run_scene_agent(
-    restaurant_info: dict, access_info: dict, total_seconds: int, thread_id: str = None, station_name: str = None
+    restaurant_info: dict,
+    access_info: dict,
+    total_seconds: int,
+    station_name: str,
+    thread_id: str = None,
 ) -> dict:
     load_dotenv()
 

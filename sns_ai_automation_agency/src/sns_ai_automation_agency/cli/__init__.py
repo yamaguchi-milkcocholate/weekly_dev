@@ -64,11 +64,25 @@ def main():
         help="動画全体の秒数（デフォルト: 15）",
     )
     survey_parser.add_argument(
+        "--image-count",
+        "-ic",
+        type=int,
+        default=10,
+        help="画像検索で取得する画像数（デフォルト: 10）",
+    )
+    survey_parser.add_argument(
         "--thread-id",
         "-t",
         type=str,
         default=None,
         help="スレッドID（指定すると前回の続きから処理可能）",
+    )
+    survey_parser.add_argument(
+        "--max-concurrent",
+        "-mc",
+        type=int,
+        default=5,
+        help="最大同時実行数（デフォルト: 5）",
     )
     survey_parser.add_argument(
         "--output",
@@ -99,6 +113,9 @@ def run_survey(args):
     print(f"🔢 強調駅数: {args.highlight_stations}")
     print(f"🔄 調査反復数: {args.iterations}")
     print(f"⏱️ 動画全体秒数: {args.total_seconds}")
+    print(f"🖼️ 画像取得数: {args.image_count}")
+    if args.max_concurrent:
+        print(f"⚙️ 最大同時実行数: {args.max_concurrent}")
     if args.thread_id:
         print(f"🆔 スレッドID: {args.thread_id}")
     print("=" * 60)
@@ -110,7 +127,9 @@ def run_survey(args):
             num_highlight_stations=args.highlight_stations,
             num_iterations=args.iterations,
             total_seconds=args.total_seconds,
+            image_count=args.image_count,
             thread_id=args.thread_id,
+            max_concurrent=args.max_concurrent,
         )
 
         # メタデータを追加

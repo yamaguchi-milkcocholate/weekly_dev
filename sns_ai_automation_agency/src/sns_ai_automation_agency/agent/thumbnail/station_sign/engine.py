@@ -3,13 +3,13 @@ from typing import Any, Dict
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-import sns_ai_automation_agency.agent.station_sign.prompt as prompt
-import sns_ai_automation_agency.agent.station_sign.schema as schema
-import sns_ai_automation_agency.agent.station_sign.search as search
+import sns_ai_automation_agency.agent.thumbnail.search as search
+import sns_ai_automation_agency.agent.thumbnail.station_sign.prompt as prompt
+import sns_ai_automation_agency.agent.thumbnail.station_sign.schema as schema
 
 
-def run_station_sign_agent(station_name: str) -> Dict[str, Any]:
-    search_result = search.search_station_sign_images(station_name)
+def run_station_sign_thumbnail_agent(station_name: str) -> Dict[str, Any]:
+    search_result = search.search_google_images(f"{station_name}駅 駅名標 写真")
 
     system_prompt = prompt.get_system_prompt()
     user_prompt = prompt.get_user_prompt(station_name=station_name, search_results=search_result)
