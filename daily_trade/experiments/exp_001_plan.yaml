@@ -1,0 +1,29 @@
+experiment_id: "exp_001_baseline_validation"
+date: "2025-11-03"
+cycle_phase: "initial"
+
+# 実験目的
+objective: "現在のシステム動作確認とベースライン再測定"
+success_criteria:
+  primary: "現在の設定でAUC 0.60+を再現（既存結果の検証）"
+  secondary: "システムプロンプト手順の動作確認"
+
+# 背景・動機
+background: "実験システム構築後の初回検証実験"
+expected_outcome: "既存性能の再現確認と実験フロー動作確認"
+
+# 実験範囲
+scope:
+  parameters: "現在の model_config.yaml 設定をそのまま使用"
+  data_range: "既存データセット ./data/dataset.parquet"
+  validation: "5-fold CV"
+
+# 発見した問題
+issues_found:
+  - "train_config.yaml が存在しない（model_config.yaml を使用）"
+  - "システムプロンプトと実際の設定ファイル構成に差異"
+
+# 修正事項
+fixes_needed:
+  - "train_config.yaml 作成またはシステムプロンプト修正"
+  - "実行コマンドの実際の引数確認"

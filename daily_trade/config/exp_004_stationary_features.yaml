@@ -1,0 +1,36 @@
+# 実験004: 定常特徴量のみでのモデル訓練
+# 目的: 非定常特徴量除去による予測性能への影響確認
+
+# 入出力設定
+input_path: "./data/ohlcv/latest_dataset.parquet"
+output_path: "./models/exp_004_model.pkl"
+
+# 交差検証設定
+cv_splits: 5
+
+# 非定常特徴量の除去設定
+exclude_features:
+  - "month" # 非定常 (p=0.800)
+  - "quarter" # 非定常 (p=0.889)
+  - "contains_leading_nan" # 定数値エラー
+
+# LightGBMモデル設定（実験002の設定をベース）
+model_params:
+  num_leaves: 31
+  learning_rate: 0.05
+  n_estimators: 500
+  feature_fraction: 0.9
+  bagging_fraction: 0.8
+  bagging_freq: 5
+  min_child_samples: 20
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 42
+  early_stopping_rounds: 50
+
+# 出力設定
+no_report: false
+# 実験仮説:
+# - 定常特徴量のみ使用で予測性能が改善
+# - ノイズとなる非定常特徴量除去により汎化性能向上
+# - 特徴量の質向上によりPrecision/Recall問題が改善

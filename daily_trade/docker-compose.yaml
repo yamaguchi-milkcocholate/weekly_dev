@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  daily-trade-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SRC_PATH: ./src
+        PROJECT_FILES_PATH: .
+    container_name: daily-trade-api
+    ports:
+      - "8000:8000"
+    environment: []
+    volumes:
+      # 開発時にソースコードの変更を反映させたい場合はコメントアウト
+      - ./src:/app/src:ro
+    restart: unless-stopped
+    # リソース制限（Cloud Runの設定に合わせる）
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    networks:
+      - daily-trade-network
+
+networks:
+  daily-trade-network:
+    driver: bridge
+    name: daily-trade-network
+
+volumes:
+  # 必要に応じて永続化ボリュームを追加
+  app-data:
+    driver: local

@@ -1,0 +1,222 @@
+# 実験008: 閾値最適化による取引実用性改善
+
+# 入出力設定
+input_path: "data/ohlcv/latest_dataset.parquet"
+output_path: "models/exp_008_threshold_optimization.pkl"
+cv_splits: 5
+
+# モデル設定（Kaggle金融コンペ標準）
+model_params:
+  # 基本パラメータ
+  n_estimators: 300
+  learning_rate: 0.03
+
+  # 過学習抑制パラメータ
+  max_depth: 3
+  num_leaves: 10
+  min_child_samples: 100
+  subsample: 0.7
+  colsample_bytree: 0.7
+
+  # 正則化パラメータ
+  reg_alpha: 0.3
+  reg_lambda: 0.3
+
+  # 追加の正則化
+  min_split_gain: 0.1
+  min_child_weight: 0.1
+
+  # ★ Kaggle式不均衡対策
+  scale_pos_weight: "auto" # クラス比に基づく自動調整
+  is_unbalance: true # LightGBM不均衡モード
+
+  # その他
+  random_state: 42
+  early_stopping_rounds: 30
+  verbose: -1
+
+# ★ Kaggle式アンサンブル設定
+ensemble:
+  enabled: true
+  methods:
+    # 1. 異なる時間窓でのモデル
+    temporal_ensemble:
+      enabled: true
+      window_sizes: [20, 30, 50] # 異なる学習期間
+
+    # 2. 特徴量サブセットアンサンブル
+    feature_ensemble:
+      enabled: true
+      subsets:
+        - "technical_indicators" # 技術指標のみ
+        - "lag_features" # ラグ特徴量のみ
+        - "volume_features" # 出来高系のみ
+        - "all_features" # 全特徴量
+
+    # 3. 異なる目的関数
+    objective_ensemble:
+      enabled: true
+      objectives:
+        - "binary" # 標準2値分類
+        - "cross_entropy" # クロスエントロピー
+
+    # 4. Bagging ensemble
+    bagging_ensemble:
+      enabled: true
+      n_bags: 5
+      bag_fraction: 0.8
+
+# 特徴量工学設定（Kaggle金融コンペ標準）
+feature_engineering:
+  # ラグ特徴量
+  lag_features:
+    features:
+      - "ret_1d"
+      - "ret_5d"
+      - "ret_10d"
+      - "atr_pct_14"
+      - "stdev_20"
+      - "rsi_14"
+      - "macd"
+      - "macd_hist"
+      - "vol_ratio_20"
+      - "tov_ratio_20"
+    periods: [1, 2, 3, 5]
+    rolling_stats: true
+    rolling_windows: [3, 5, 10]
+    momentum_features: true
+    momentum_periods: [2, 5, 10]
+
+  # 相互作用項
+  interaction_features:
+    - ["atr_pct_14", "rsi_14"]
+    - ["stdev_20", "ret_1d"]
+    - ["bb_width_20", "macd"]
+    - ["vol_ratio_20", "ret_5d"]
+    - ["tov_ratio_20", "bb_pband_20"]
+    - ["dow", "atr_pct_14"]
+
+  # 非線形変換
+  nonlinear_transforms:
+    log_features:
+      - "atr_pct_14"
+      - "vol_ratio_20"
+      - "tov_ratio_20"
+    sqrt_features:
+      - "stdev_20"
+      - "bb_width_20"
+    rank_features:
+      - "ret_1d"
+      - "ret_5d"
+      - "ret_10d"
+
+  # ドメイン知識特徴量
+  domain_features:
+    momentum_strength: true
+    volatility_regime: true
+    trend_consistency: true
+    volume_spike: true
+    oversold_oversold: true
+    overbought: true
+    technical_score: true
+    risk_score: true
+
+# ★ Kaggle式データ拡張（SMOTE代替）
+data_augmentation:
+  enabled: true
+  # SMOTEの代わりにKaggleで実証済みの手法
+  methods:
+    # 1. Window Sliding（時間窓スライド）
+    window_sliding:
+      enabled: true
+      slide_steps: [5, 10, 15] # 日数単位のスライド
+
+    # 2. Noise Injection（軽微ノイズ追加）
+    noise_injection:
+      enabled: true
+      noise_level: 0.005 # 0.5%の軽微ノイズ
+      target_features:
+        - "ret_1d"
+        - "ret_5d"
+        - "atr_pct_14"
+
+    # 3. Feature Dropout（特徴量ドロップアウト）
+    feature_dropout:
+      enabled: true
+      dropout_rate: 0.1 # 10%の特徴量をランダム除去
+
+    # 4. Target Engineering（ターゲット変換）
+    target_engineering:
+      enabled: true
+      methods:
+        - "label_smoothing" # ラベルスムージング
+        - "soft_targets" # ソフトターゲット
+
+# 特徴量選択設定
+feature_selection:
+  exclude_features:
+    - "month"
+    - "quarter"
+    - "contains_leading_nan"
+    - "next_ret"
+    - "day_of_month"
+
+  correlation_threshold: 0.90
+  importance_threshold: 0.001
+
+# ★ 新機能: Kaggle式閾値最適化設定
+threshold_optimization:
+  enabled: true
+
+  # Kaggle金融コンペの実践手法
+  methods:
+    # 1. ROC曲線ベース最適化
+    roc_optimization:
+      enabled: true
+      metric: "youden_index" # J = Sensitivity + Specificity - 1
+
+    # 2. Precision-Recall曲線ベース最適化
+    pr_optimization:
+      enabled: true
+      metric: "f1_score" # F1スコア最大化
+
+    # 3. ビジネス目標ベース最適化
+    business_optimization:
+      enabled: true
+      target_daily_trades: 5.0 # 1日5銘柄の取引機会
+      min_precision: 0.65 # 最低65%の精度維持
+      profit_weight: 1.0 # 利益重視度
+
+    # 4. 時期別動的閾値（Kaggle上級手法）
+    temporal_optimization:
+      enabled: true
+      time_periods: ["2022", "2023", "2024"] # 年別最適化
+      adaptive_threshold: true # 市場状況に応じた動的調整
+
+  # 評価する閾値範囲（Kaggle標準）
+  threshold_range:
+    start: 0.05 # より低い閾値から検証
+    end: 0.95
+    step: 0.02 # より細かい刻み
+
+  # Cross-validation時の閾値最適化
+  cv_threshold_optimization:
+    enabled: true
+    fold_specific: true # フォールド別最適閾値
+    ensemble_threshold: true # アンサンブル用閾値
+
+  # 評価指標（Kaggle式総合評価）
+  evaluation_metrics:
+    - "precision"
+    - "recall"
+    - "f1_score"
+    - "auc_roc"
+    - "auc_pr"
+    - "daily_trading_opportunities"
+    - "success_rate"
+    - "sharpe_ratio" # 金融特化指標
+
+# ログ設定
+logging:
+  level: "INFO"
+  log_file: "logs/exp_008_threshold_optimization.log"

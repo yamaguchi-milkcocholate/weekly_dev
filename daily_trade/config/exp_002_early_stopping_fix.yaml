@@ -1,0 +1,30 @@
+# 実験002: 早期停止設定の修正
+# 目的: 適切な学習回数の確保と汎化性能向上
+
+# 入出力設定
+input_path: "./data/ohlcv/latest_dataset.parquet"
+output_path: "./models/exp_002_model.pkl"
+
+# 交差検証設定
+cv_splits: 5
+
+# LightGBMモデル設定
+model_params:
+  num_leaves: 31
+  learning_rate: 0.05 # より保守的な学習率（0.1→0.05）
+  n_estimators: 500 # 最大回数を増加（200→500）
+  feature_fraction: 0.9
+  bagging_fraction: 0.8
+  bagging_freq: 5
+  min_child_samples: 20
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 42
+  early_stopping_rounds: 50 # 早期停止を緩和（デフォルト→50）
+
+# 出力設定
+no_report: false
+# 実験仮説:
+# - early_stopping_roundsを50に増加することで適切な学習回数を確保
+# - learning_rateを0.05に下げることで過学習を抑制
+# - CV結果と最終結果の乖離を減少させる
