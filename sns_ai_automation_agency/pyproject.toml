@@ -23,6 +23,8 @@ dependencies = [
     "gspread>=6.2.1",
     "gspread-dataframe>=4.0.0",
     "google-auth>=2.43.0",
+    "pydub>=0.25.1",
+    "elevenlabs>=2.24.0",
 ]
 
 [project.optional-dependencies]

@@ -613,6 +613,23 @@ wheels = [
 ]
 
 [[package]]
+name = "elevenlabs"
+version = "2.24.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/b8/7ef371670766a09169969531bd9cfb6c3bfebe55ae479d2f009cfff4b2f7/elevenlabs-2.24.0.tar.gz", hash = "sha256:bd5278ea8521aeb463ef4649192b5aa8cedf12be7f9b3ca19c79331a7d33d305", size = 418072 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/52/a21ebfa6a2cadeb3b234a4bd92a59809fbbcbb6024ee2e48774f30daf8cf/elevenlabs-2.24.0-py3-none-any.whl", hash = "sha256:b8d0435f84a3bc0592dd086b4945bd79d9430c6892bf3f75752c03bb53ae3ad6", size = 1121523 },
+]
+
+[[package]]
 name = "executing"
 version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2669,6 +2686,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pydub"
+version = "0.25.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/9a/e6bca0eed82db26562c73b5076539a4a08d3cffd19c3cc5913a3e61145fd/pydub-0.25.1.tar.gz", hash = "sha256:980a33ce9949cab2a569606b65674d748ecbca4f0796887fd6f46173a7b0d30f", size = 38326 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/53/d78dc063216e62fc55f6b2eebb447f6a4b0a59f55c8406376f76bf959b08/pydub-0.25.1-py2.py3-none-any.whl", hash = "sha256:65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6", size = 32327 },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3246,6 +3272,7 @@ name = "sns-ai-automation-agency"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "elevenlabs" },
     { name = "google-auth" },
     { name = "gspread" },
     { name = "gspread-dataframe" },
@@ -3259,6 +3286,7 @@ dependencies = [
     { name = "langsmith" },
     { name = "pandas" },
     { name = "pydantic" },
+    { name = "pydub" },
     { name = "python-dotenv" },
     { name = "requests" },
 ]
@@ -3285,6 +3313,7 @@ storage = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "boto3", marker = "extra == 'storage'", specifier = ">=1.29.0" },
+    { name = "elevenlabs", specifier = ">=2.24.0" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.104.0" },
     { name = "ffmpeg-python", marker = "extra == 'media'", specifier = ">=0.2.0" },
     { name = "google-auth", specifier = ">=2.43.0" },
@@ -3301,6 +3330,7 @@ requires-dist = [
     { name = "langsmith", specifier = ">=0.1.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pydantic", specifier = ">=2.5.0" },
+    { name = "pydub", specifier = ">=0.25.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
