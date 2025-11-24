@@ -10,8 +10,9 @@ import {
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
 import { ImageWithFallback } from "./components/figma/ImageWithFallback";
-import { fetchScenesData } from "./libs/api";
+import { fetchScenesData, submitSelections } from "./libs/api";
 import type { Scene, SceneImages } from "./types/scene";
+import { SelectedImage } from "./types/submit";
 
 export default function App() {
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -20,6 +21,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selections, setSelections] = useState<Record<number, number>>({});
   const [showSummary, setShowSummary] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   // GASからデータを取得
   useEffect(() => {
@@ -60,10 +64,72 @@ export default function App() {
   const handleClearAll = () => {
     setSelections({});
     setShowSummary(false);
+    setSubmitSuccess(false);
+    setSubmitError(null);
   };
 
-  const handleSubmit = () => {
-    setShowSummary(true);
+  const handleSubmit = async () => {
+    // バリデーション
+    if (selectedCount === 0) {
+      setSubmitError("画像が選択されていません");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setSubmitError(null);
+      setSubmitSuccess(false); // 前回の成功状態をクリア
+
+      // 選択内容を配列に変換
+      const submitData: SelectedImage[] = Object.entries(selections)
+        .map(([sceneId, imageIndex]) => {
+          const processIndex = parseInt(sceneId);
+          const imageUrl = sceneImages[processIndex]?.[imageIndex];
+
+          // 画像URLが存在しない場合はスキップ
+          if (!imageUrl) {
+            console.warn(`Image URL not found for scene ${processIndex}`);
+            return null;
+          }
+
+          return {
+            processIndex,
+            selectedImageIndex: imageIndex,
+            imageUrl,
+          };
+        })
+        .filter((item): item is SelectedImage => item !== null);
+
+      // 有効なデータがない場合
+      if (submitData.length === 0) {
+        setSubmitError("有効な画像データがありません");
+        return;
+      }
+
+      // GASに送信
+      const result = await submitSelections(submitData);
+
+      if (result.success) {
+        setShowSummary(true);
+        setSubmitSuccess(true);
+
+        // 成功メッセージを5秒後に自動で消す
+        setTimeout(() => {
+          setSubmitSuccess(false);
+        }, 5000);
+      } else {
+        setSubmitError(result.message || "送信に失敗しました");
+      }
+    } catch (error) {
+      console.error("Submit error:", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "送信中にエラーが発生しました。もう一度お試しください。"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedCount = Object.keys(selections).length;
@@ -125,14 +191,39 @@ export default function App() {
               )}
               <Button
                 onClick={handleSubmit}
-                disabled={selectedCount === 0}
+                disabled={selectedCount === 0 || isSubmitting}
                 size="sm"
               >
-                <Save className="size-4 mr-1" />
-                選択を確定
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="size-4 mr-1 animate-spin" />
+                    送信中...
+                  </>
+                ) : (
+                  <>
+                    <Save className="size-4 mr-1" />
+                    選択を確定
+                  </>
+                )}
               </Button>
             </div>
           </div>
+
+          {/* エラーメッセージ表示 */}
+          {submitError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600">
+              {submitError}
+            </div>
+          )}
+
+          {/* 成功メッセージ表示 */}
+          {submitSuccess && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-600 flex items-center gap-2">
+              <Check className="size-4" />
+              選択内容を保存しました
+            </div>
+          )}
+
           <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
             <div
               className="bg-blue-500 h-2 rounded-full transition-all"
@@ -225,10 +316,6 @@ export default function App() {
           {scenes.map((scene: Scene) => {
             const images = sceneImages[scene.processIndex] || [];
             const selectedImage = selections[scene.processIndex] ?? null;
-            console.log(scene);
-            console.log(scene.processIndex);
-            console.log(sceneImages);
-            console.log(images);
 
             return (
               <AccordionItem
