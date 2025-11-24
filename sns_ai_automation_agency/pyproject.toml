@@ -20,6 +20,9 @@ dependencies = [
     "langchain-community>=0.4.1",
     "pandas>=2.3.3",
     "langsmith>=0.1.0",
+    "gspread>=6.2.1",
+    "gspread-dataframe>=4.0.0",
+    "google-auth>=2.43.0",
 ]
 
 [project.optional-dependencies]

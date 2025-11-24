@@ -65,6 +65,29 @@ ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
+4. GCP サービスアカウント作成
+
+```shell
+PROJECT_ID=weekly-dev-20251013
+gcloud projects get-iam-policy ${PROJECT_ID}
+
+# オーナー権限でサービスアカウントを作成
+# サービスアカウント作成
+gcloud --project ${PROJECT_ID} iam service-accounts create sa-sns-aaa-google-workspace \
+  --display-name="Google Workspace Service Account for SNS AAA"
+
+# API を有効化
+gcloud --project ${PROJECT_ID} services enable sheets.googleapis.com
+gcloud --project ${PROJECT_ID} services enable drive.googleapis.com
+
+# サービスアカウントキーを作成（まだの場合）
+SERVICE_ACCOUNT=sa-sns-aaa-google-workspace@${PROJECT_ID}.iam.gserviceaccount.com
+gcloud --project ${PROJECT_ID} iam service-accounts keys create sa-key.json \
+  --iam-account=${SERVICE_ACCOUNT}
+```
+
+スプレッドシートを作成して、共有で`$SERVICE_ACCOUNT`を指定。
+
 #### API キーの取得方法
 
 - **Perplexity API**: [Perplexity AI](https://www.perplexity.ai/) でアカウント作成後、API 設定から取得
