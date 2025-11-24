@@ -21,3 +21,9 @@ npx create-next-app@latest scene_image_picker --ts --tailwind
 ```shell
 cd scene_image_picker && npm run dev
 ```
+
+### 4.Vercel デプロイ
+
+Git と連携しているため、マージするとデプロイされる
+
+[Vercel](https://vercel.com/sns-ai-automation-agency-pocs-projects)
