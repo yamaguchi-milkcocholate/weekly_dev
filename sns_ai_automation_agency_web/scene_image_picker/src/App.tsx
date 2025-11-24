@@ -123,15 +123,10 @@ const generateSceneImages = (sceneId: number): string[] => {
 };
 
 export default function App() {
-  const [selections, setSelections] = useState<
-    Record<number, number>
-  >({});
+  const [selections, setSelections] = useState<Record<number, number>>({});
   const [showSummary, setShowSummary] = useState(false);
 
-  const handleSelectImage = (
-    sceneId: number,
-    imageIndex: number,
-  ) => {
+  const handleSelectImage = (sceneId: number, imageIndex: number) => {
     setSelections((prev) => ({
       ...prev,
       [sceneId]: imageIndex,
@@ -173,19 +168,13 @@ export default function App() {
           <div className="flex items-center justify-between mb-2">
             <div>
               <span className="mr-2">選択進捗:</span>
-              <span
-                className={allSelected ? "text-green-600" : ""}
-              >
+              <span className={allSelected ? "text-green-600" : ""}>
                 {selectedCount} / {SCENES.length} シーン
               </span>
             </div>
             <div className="flex gap-2">
               {selectedCount > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearAll}
-                >
+                <Button variant="outline" size="sm" onClick={handleClearAll}>
                   <X className="size-4 mr-1" />
                   すべてクリア
                 </Button>
@@ -215,12 +204,10 @@ export default function App() {
               <h3 className="text-sm mb-3">選択中の画像</h3>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {SCENES.filter(
-                  (scene) => selections[scene.id] !== undefined,
+                  (scene) => selections[scene.id] !== undefined
                 ).map((scene) => {
                   const imageIndex = selections[scene.id];
-                  const imageUrl = generateSceneImages(
-                    scene.id,
-                  )[imageIndex];
+                  const imageUrl = generateSceneImages(scene.id)[imageIndex];
                   return (
                     <div
                       key={scene.id}
@@ -233,9 +220,7 @@ export default function App() {
                           className="w-full h-full object-cover"
                         />
                         <button
-                          onClick={() =>
-                            handleClearSelection(scene.id)
-                          }
+                          onClick={() => handleClearSelection(scene.id)}
                           className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X className="size-3" />
@@ -260,28 +245,24 @@ export default function App() {
               選択完了
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {SCENES.filter(
-                (scene) => selections[scene.id] !== undefined,
-              ).map((scene) => {
-                const imageIndex = selections[scene.id];
-                const imageUrl = generateSceneImages(scene.id)[
-                  imageIndex
-                ];
-                return (
-                  <div key={scene.id} className="space-y-2">
-                    <div className="aspect-square rounded-lg overflow-hidden border-2 border-green-500">
-                      <ImageWithFallback
-                        src={imageUrl}
-                        alt={scene.name}
-                        className="w-full h-full object-cover"
-                      />
+              {SCENES.filter((scene) => selections[scene.id] !== undefined).map(
+                (scene) => {
+                  const imageIndex = selections[scene.id];
+                  const imageUrl = generateSceneImages(scene.id)[imageIndex];
+                  return (
+                    <div key={scene.id} className="space-y-2">
+                      <div className="aspect-square rounded-lg overflow-hidden border-2 border-green-500">
+                        <ImageWithFallback
+                          src={imageUrl}
+                          alt={scene.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <p className="text-sm text-center">{scene.name}</p>
                     </div>
-                    <p className="text-sm text-center">
-                      {scene.name}
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
             </div>
           </Card>
         )}
@@ -315,9 +296,7 @@ export default function App() {
                     </div>
                     <div className="flex-1 text-left space-y-1 min-w-0">
                       <div>{scene.name}</div>
-                      <div className="text-sm text-blue-600">
-                        {scene.telop}
-                      </div>
+                      <div className="text-sm text-blue-600">{scene.telop}</div>
                       <p className="text-sm text-gray-600 pr-8">
                         {scene.description}
                       </p>
