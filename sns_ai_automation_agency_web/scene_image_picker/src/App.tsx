@@ -10,7 +10,7 @@ import {
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
 import { ImageWithFallback } from "./components/figma/ImageWithFallback";
-import { fetchScenesData } from "./lib/api";
+import { fetchScenesData } from "./libs/api";
 import type { Scene, SceneImages } from "./types/scene";
 
 export default function App() {
