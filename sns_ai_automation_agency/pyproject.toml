@@ -25,6 +25,9 @@ dependencies = [
     "google-auth>=2.43.0",
     "pydub>=0.25.1",
     "elevenlabs>=2.24.0",
+    "google-api-python-client>=2.187.0",
+    "pillow>=12.0.0",
+    "google-genai>=1.52.0",
 ]
 
 [project.optional-dependencies]

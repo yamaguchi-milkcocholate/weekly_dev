@@ -65,7 +65,7 @@ ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-4. GCP サービスアカウント作成
+### 4. GCP サービスアカウント作成
 
 ```shell
 PROJECT_ID=weekly-dev-20251013
@@ -86,7 +86,16 @@ gcloud --project ${PROJECT_ID} iam service-accounts keys create sa-key.json \
   --iam-account=${SERVICE_ACCOUNT}
 ```
 
-スプレッドシートを作成して、共有で`$SERVICE_ACCOUNT`を指定。
+共有で`$SERVICE_ACCOUNT`を指定。
+
+- スプレッドシート
+- Drive のアップロード先
+
+### 5. Google Auth Platform
+
+[Google Auth Platform](https://console.cloud.google.com/auth/overview?project=weekly-dev-20251013)で OAuth の設定を作成
+
+SA では Drive にアップロードができないためこの方法にした。
 
 #### API キーの取得方法
 

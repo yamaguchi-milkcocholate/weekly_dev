@@ -1,4 +1,6 @@
 sa-key.json
+oauth.json
+token.json
 
 # Environment files
 .env
