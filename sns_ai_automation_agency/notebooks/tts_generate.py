@@ -33,7 +33,8 @@ def generate_tts(text: str, filename: str) -> None:
         language_code=LANGUAGE,
     )
 
-    save(audio, cache_dir / filename)
+    (cache_dir / "audio").mkdir(exist_ok=True, parents=True)
+    save(audio, cache_dir / "audio" / filename)
 
 
 def read_sheet() -> pd.DataFrame:
