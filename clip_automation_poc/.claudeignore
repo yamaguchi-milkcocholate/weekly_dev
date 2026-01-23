@@ -1,0 +1,34 @@
+# --- Python固有の無視設定 ---
+
+# バイトコードのコンパイルキャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 仮想環境 (使用しているディレクトリ名に合わせてください)
+.venv/
+venv/
+env/
+.env/
+
+# 配布・ビルド用アーティファクト
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# テスト・カバレッジ関連 (AIに読ませる必要がない場合)
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebookのチェックポイント
+.ipynb_checkpoints/
+
+# ログファイル
+*.log
+
+# --- その他 ---
+# AIに読ませたくない機密情報や巨大なデータセット
+data/
