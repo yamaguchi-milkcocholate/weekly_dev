@@ -2,14 +2,13 @@ import gzip
 import json
 import logging
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import polars as pl
 import requests
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class RealEstateDataFetcher:
@@ -252,7 +251,9 @@ class RealEstateDataFetcher:
         dataframes: list[pl.DataFrame] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 各年のFutureオブジェクトを作成
-            future_to_year = {executor.submit(fetch_and_clean_year, year): year for year in range(start_year, end_year + 1)}
+            future_to_year = {
+                executor.submit(fetch_and_clean_year, year): year for year in range(start_year, end_year + 1)
+            }
             # 完了したタスクから順次結果を取得
             for future in as_completed(future_to_year):
                 year = future_to_year[future]
