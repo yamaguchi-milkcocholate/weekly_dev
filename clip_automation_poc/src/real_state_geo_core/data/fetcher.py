@@ -9,6 +9,8 @@ import numpy as np
 import polars as pl
 import requests
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 class RealEstateDataFetcher:
     """
@@ -206,3 +208,66 @@ class RealEstateDataFetcher:
         lon_offset = (radius_km / 91.0) * np.sin(angle)
         # 中心座標にオフセットを加算して返却
         return {"latitude": center_lat + lat_offset, "longitude": center_lon + lon_offset}
+
+    def fetch_real_estate_multi_year(
+        self, start_year: int, end_year: int, city_code: str, max_workers: int = 5
+    ) -> pl.DataFrame | None:
+        """
+        複数年にわたる不動産取引データを並行取得し、統合DataFrameを返します。
+
+        Args:
+            start_year (int): 開始年（例: 2020）。
+            end_year (int): 終了年（例: 2024）。
+            city_code (str): 市区町村コード（5桁）。
+            max_workers (int, optional): 並行取得スレッド数。デフォルト5。
+
+        Returns:
+            pl.DataFrame | None: 全年統合後のDataFrame。取得失敗時はNone。
+
+        Raises:
+            ValueError: start_year > end_year の場合。
+        """
+        if start_year > end_year:
+            raise ValueError("start_yearはend_year以下である必要があります")
+
+        # 年ごとにAPIリクエストを並行実行
+        def fetch_and_clean_year(year_int: int) -> pl.DataFrame | None:
+            """指定年のデータを取得しクリーニングして返す"""
+            year_str = str(year_int)
+            logging.info(f"{year_str}年のデータ取得開始（市区町村コード: {city_code}）")
+            api_response = self.fetch_real_estate(year_str, city_code)
+            if api_response is None:
+                logging.warning(f"{year_str}年のデータ取得失敗")
+                return None
+            df = self.clean_real_estate_data(api_response)
+            if df is None or df.height == 0:
+                logging.warning(f"{year_str}年のデータがクリーニング後に空です")
+                return None
+            # 年カラムを追加（文字列型）
+            df = df.with_columns(pl.lit(year_str).alias("Year"))
+            logging.info(f"{year_str}年のデータ取得完了（{df.height}件）")
+            return df
+
+        # ThreadPoolExecutorで並行処理
+        dataframes: list[pl.DataFrame] = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 各年のFutureオブジェクトを作成
+            future_to_year = {executor.submit(fetch_and_clean_year, year): year for year in range(start_year, end_year + 1)}
+            # 完了したタスクから順次結果を取得
+            for future in as_completed(future_to_year):
+                year = future_to_year[future]
+                try:
+                    df = future.result()
+                    if df is not None and df.height > 0:
+                        dataframes.append(df)
+                except Exception as e:
+                    logging.error(f"{year}年のデータ取得中に例外が発生: {e}")
+
+        # 全年データを縦方向に結合
+        if not dataframes:
+            logging.warning("全年のデータ取得に失敗しました")
+            return None
+
+        combined_df = pl.concat(dataframes, how="vertical_relaxed")
+        logging.info(f"全{len(dataframes)}年分のデータを統合（合計{combined_df.height}件）")
+        return combined_df
