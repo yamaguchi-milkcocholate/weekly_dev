@@ -1,5 +1,5 @@
 ---
-name: spec-update
+name: spec
 description: プロジェクトの技術仕様書（docs/SYSTEM_DESING.md）の作成と更新
 ---
 
