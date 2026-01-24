@@ -128,6 +128,7 @@ class MeshMasterBuilder:
 
         # 全区のGeoDataFrameを統合
         combined_gdf = gpd.pd.concat(gdfs, ignore_index=True)
+        combined_gdf["name"] = combined_gdf["name"].str.replace("東京都", "")
         logging.info(f"行政区域データを読み込みました: {len(combined_gdf)}件のポリゴン")
 
         return combined_gdf
@@ -186,16 +187,9 @@ class MeshMasterBuilder:
         logging.info(f"23区内のメッシュ格子点をフィルタリングしました: {len(joined_gdf)}点")
 
         # GeoJSONのカラム名を確認（国土数値情報の標準形式）
-        # N03_001: 都道府県名
-        # N03_004: 市区町村名
-        # N03_007: 市区町村コード
+        # name: 都道府県名+市区町村名
 
-        city_col = None
-        if "N03_004" in joined_gdf.columns:
-            city_col = "N03_004"
-        elif "city_name" in joined_gdf.columns:
-            city_col = "city_name"
-
+        city_col = "name"
         # 市区町村名を設定
         if city_col is None:
             joined_gdf["city_name"] = ""
@@ -309,7 +303,7 @@ class MeshMasterBuilder:
         logging.info(f"最寄駅情報を計算しました: {result_df.height}件")
         return result_df
 
-    def district_namebuild_mesh_master(self, output_path: Path) -> pl.DataFrame:
+    def build_mesh_master(self, output_path: Path) -> pl.DataFrame:
         """
         東京23区のメッシュマスターを生成し、CSVファイルに保存します。
 
