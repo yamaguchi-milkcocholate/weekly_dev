@@ -13,7 +13,11 @@ from shapely.geometry import Point
 
 class MeshMasterBuilder:
     """
-    東京23区を100m四方のメッシュで分割し、各メッシュ中心点に行政情報と最寄駅情報を付与するクラス。
+    東京23区を100m四方のメッシュで分割し、各メッシュ中心点に行政情報と駅情報を付与するクラス。
+
+    駅情報は以下の2つのモードで生成できます：
+    - "single"モード: 各メッシュに最寄駅1つのみを紐付け（横持ち形式）
+    - "multi"モード: 各メッシュに徒歩圏内の駅をすべて紐付け（縦持ち形式）
 
     Attributes:
         station_csv_path (Path): 駅データCSVファイルのパス。
@@ -238,6 +242,97 @@ class MeshMasterBuilder:
 
         return distance_m
 
+    def _calculate_nearby_stations(
+        self, mesh_gdf: gpd.GeoDataFrame, station_df: pl.DataFrame, max_walk_minutes: float = 30.0
+    ) -> pl.DataFrame:
+        """
+        各メッシュ点から徒歩圏内の駅をすべて検索し、距離と徒歩分数を計算します（縦持ち形式）。
+
+        Args:
+            mesh_gdf (gpd.GeoDataFrame): メッシュ格子点のGeoDataFrame。
+            station_df (pl.DataFrame): 駅データのPolars DataFrame。
+            max_walk_minutes (float, optional): 最大徒歩分数。デフォルトは30.0。
+
+        Returns:
+            pl.DataFrame: 縦持ち形式のメッシュマスター（1メッシュ×N駅）。
+        """
+        # 最大距離を計算（メートル）
+        max_distance_m = max_walk_minutes * 80.0
+
+        # 駅の座標をNumPy配列に変換
+        station_coords = station_df.select(["lat", "lon"]).to_numpy()
+        station_names = station_df["station_name"].to_list()
+
+        # cKDTreeを構築
+        tree = cKDTree(station_coords)
+
+        # メッシュ点の座標をNumPy配列に変換
+        mesh_coords = mesh_gdf[["latitude", "longitude"]].to_numpy()
+
+        # 範囲検索の半径を度数に変換（東京付近の概算、安全マージン20%）
+        r_degrees = max_distance_m / 1000.0 / 111.0 * 1.2
+
+        # 範囲検索: 各メッシュの徒歩圏内の駅インデックスを取得
+        indices_list = tree.query_ball_point(mesh_coords, r=r_degrees)
+
+        # 結果を格納するリスト
+        results: list[dict[str, Any]] = []
+
+        for i, (lat, lon) in enumerate(mesh_coords):
+            nearby_station_indices = indices_list[i]
+
+            # メッシュIDを生成
+            mesh_id = f"{lat:.6f}_{lon:.6f}"
+
+            # 市区町村名と地区名を取得
+            city_name = mesh_gdf.iloc[i]["city_name"]
+            district_name = mesh_gdf.iloc[i]["district_name"]
+
+            # 駅ごとの距離を計算
+            station_distances: list[dict[str, Any]] = []
+            for station_idx in nearby_station_indices:
+                station_lat = station_coords[station_idx][0]
+                station_lon = station_coords[station_idx][1]
+
+                # Haversine距離で正確な距離を計算
+                distance_m = self._haversine_distance(lat, lon, station_lat, station_lon)
+
+                # 最大距離で再フィルタリング
+                if distance_m <= max_distance_m:
+                    walk_minutes = round(distance_m / 80.0, 1)
+                    station_distances.append(
+                        {
+                            "station_idx": station_idx,
+                            "distance_m": round(distance_m, 1),
+                            "walk_minutes": walk_minutes,
+                        }
+                    )
+
+            # 距離順にソート
+            station_distances.sort(key=lambda x: x["distance_m"])
+
+            # 各駅についてレコードを追加
+            for sd in station_distances:
+                station_name = station_names[sd["station_idx"]]
+                results.append(
+                    {
+                        "mesh_id": mesh_id,
+                        "latitude": lat,
+                        "longitude": lon,
+                        "city_name": city_name,
+                        "district_name": district_name,
+                        "station_name": station_name,
+                        "distance_m": sd["distance_m"],
+                        "walk_minutes": sd["walk_minutes"],
+                    }
+                )
+
+        # Polars DataFrameに変換
+        result_df = pl.DataFrame(results)
+
+        logging.info(f"徒歩圏内駅情報を計算しました: {result_df.height}件（メッシュ数: {len(mesh_coords)}）")
+        return result_df
+
     def _calculate_nearest_station(self, mesh_gdf: gpd.GeoDataFrame, station_df: pl.DataFrame) -> pl.DataFrame:
         """
         各メッシュ点から最寄駅を検索し、距離と徒歩分数を計算します。
@@ -303,20 +398,26 @@ class MeshMasterBuilder:
         logging.info(f"最寄駅情報を計算しました: {result_df.height}件")
         return result_df
 
-    def build_mesh_master(self, output_path: Path) -> pl.DataFrame:
+    def build_mesh_master(self, output_path: Path, max_walk_minutes: float = 30.0, mode: str = "multi") -> pl.DataFrame:
         """
         東京23区のメッシュマスターを生成し、CSVファイルに保存します。
 
         Args:
             output_path (Path): 出力CSVファイルのパス。
+            max_walk_minutes (float, optional): 最大徒歩分数（mode="multi"の場合のみ有効）。デフォルトは30.0。
+            mode (str, optional): 駅紐付けモード。"single"=最寄駅1つ、"multi"=徒歩圏内全駅。デフォルトは"multi"。
 
         Returns:
             pl.DataFrame: 生成されたメッシュマスターのPolars DataFrame。
 
         Raises:
             FileNotFoundError: 必要なデータファイルが見つからない場合。
+            ValueError: modeパラメータが"single"または"multi"以外の場合。
         """
-        logging.info("メッシュマスター生成を開始します")
+        if mode not in ("single", "multi"):
+            raise ValueError(f"modeパラメータは'single'または'multi'である必要があります: {mode}")
+
+        logging.info(f"メッシュマスター生成を開始します（モード: {mode}）")
 
         # Step 1: 駅データを読み込み
         station_df = self._load_station_data()
@@ -334,8 +435,11 @@ class MeshMasterBuilder:
         # Step 5: 23区内の点のみに絞り込み、行政情報を付与
         mesh_gdf = self._filter_and_attach_info(mesh_gdf, boundary_gdf)
 
-        # Step 6: 最寄駅と徒歩分数を計算
-        mesh_master_df = self._calculate_nearest_station(mesh_gdf, station_df)
+        # Step 6: 駅情報を計算（モードによって処理を切り替え）
+        if mode == "single":
+            mesh_master_df = self._calculate_nearest_station(mesh_gdf, station_df)
+        else:  # mode == "multi"
+            mesh_master_df = self._calculate_nearby_stations(mesh_gdf, station_df, max_walk_minutes)
 
         # Step 7: CSVに保存
         mesh_master_df.write_csv(output_path)
