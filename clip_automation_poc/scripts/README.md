@@ -1,5 +1,54 @@
 # スクリプト一覧
 
+## create_ml_dataset.py
+
+機械学習用データセット作成スクリプト。
+
+### 入力
+
+- 国土交通省 MLIT API（環境変数 `REINFOLIB_API_KEY` が必要）
+
+### 出力
+
+- `data/ml_dataset/tokyo_23_ml_dataset.csv` - 坪単価予測用データセット
+
+### 実行方法
+
+```bash
+# デフォルト設定で実行（2023-2024年、東京23区全体）
+python scripts/create_ml_dataset.py
+
+# 期間と出力先をカスタマイズ
+python scripts/create_ml_dataset.py --start-year 2020 --end-year 2024 --output-path data/ml_dataset/tokyo_2020-2024.csv
+
+# 特定区のみ取得（例: 千代田区 + 港区）
+python scripts/create_ml_dataset.py --city-codes "13101,13103"
+```
+
+### 説明
+
+MLIT APIから東京23区の不動産取引データを取得し、機械学習用の坪単価予測データセットをCSV形式で出力します。
+
+**データフィルタリング**:
+
+- 不動産種類: 中古マンションのみ（`Type == "中古マンション等"`）
+- 用途: 住宅のみ（`Use == "住宅"`）
+
+**特徴量**:
+
+- **目的変数**: `tsubo_price`（坪単価）
+- **説明変数（数値）**: 面積、延床面積、築年数、建ぺい率、容積率、取引年
+- **説明変数（カテゴリ）**: 市区町村名、建物構造、用途地域
+
+**パラメータ**:
+
+- `--start-year`: データ取得開始年（デフォルト: 2023）
+- `--end-year`: データ取得終了年（デフォルト: 2024）
+- `--city-codes`: 市区町村コード（カンマ区切り、デフォルト: 東京23区全体）
+- `--output-path`: 出力CSVパス（デフォルト: `data/ml_dataset/tokyo_23_ml_dataset.csv`）
+
+---
+
 ## generate_mesh_master.py
 
 東京23区のメッシュマスターデータを生成するスクリプト。
