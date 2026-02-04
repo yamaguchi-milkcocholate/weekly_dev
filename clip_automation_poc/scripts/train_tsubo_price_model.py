@@ -78,20 +78,25 @@ def main():
         logging.info(f"  {idx + 1}. {row['feature_name']}: {row['importance_gain']:.2f} ({row['category']})")
 
     # ===== Step 2: マクロトレンド分析（Prophet） =====
-    logging.info("\n=== Step 2: マクロトレンド分析（Prophet） ===")
+    logging.info("\n=== Step 2: マクロトレンド分析（Prophet - 区ごと） ===")
     prophet_analyzer = ProphetTrendAnalyzer(random_state=RANDOM_STATE)
 
-    # モデル学習
-    prophet_analyzer.fit(train_valid_df, date_col="transaction_date", target_col="tsubo_price")
+    # 区ごとにモデル学習
+    prophet_analyzer.fit(
+        train_valid_df,
+        date_col="transaction_date",
+        target_col="tsubo_price",
+        municipality_col="Municipality",
+    )
 
-    # 将来12ヶ月の予測
-    prophet_analyzer.forecast_future(periods=12, freq="MS")
+    # 将来12ヶ月の予測（区ごと）
+    forecast_df = prophet_analyzer.forecast_future(periods=12, freq="MS")
 
     # 市場トレンドを保存
-    prophet_analyzer.save_forecast(str(OUTPUT_DIR / "market_trend_prophet.csv"), include_history=True)
+    prophet_analyzer.save_forecast(forecast_df, str(OUTPUT_DIR / "market_trend_prophet.csv"), include_history=True)
 
     # ===== Step 3: ハイブリッド予測（Prophet + LightGBM） =====
-    logging.info("\n=== Step 3: ハイブリッド予測（Prophet + LightGBM） ===")
+    logging.info("\n=== Step 3: ハイブリッド予測（区ごとProphet + LightGBM） ===")
     hybrid_predictor = HybridPredictor(random_state=RANDOM_STATE)
 
     # 時系列交差検証
@@ -101,6 +106,7 @@ def main():
         tscv,
         target_col="tsubo_price",
         date_col="transaction_date",
+        municipality_col="Municipality",
     )
 
     # 交差検証メトリクスを保存
@@ -118,12 +124,15 @@ def main():
         train_valid_df,
         target_col="tsubo_price",
         date_col="transaction_date",
+        municipality_col="Municipality",
     )
 
     # ===== Testデータ（2025年）で評価 =====
     if test_df.height > 0:
         logging.info("\nTestデータ（2025年）で評価中...")
-        test_metrics = hybrid_predictor.evaluate(test_df, target_col="tsubo_price", date_col="transaction_date")
+        test_metrics = hybrid_predictor.evaluate(
+            test_df, target_col="tsubo_price", date_col="transaction_date", municipality_col="Municipality"
+        )
         logging.info(f"  RMSE: {test_metrics['rmse']:.2f}")
         logging.info(f"  MAE: {test_metrics['mae']:.2f}")
         logging.info(f"  MAPE: {test_metrics['mape']:.2f}%")
@@ -134,6 +143,7 @@ def main():
             str(OUTPUT_DIR / "hybrid_prediction_results.csv"),
             target_col="tsubo_price",
             date_col="transaction_date",
+            municipality_col="Municipality",
             include_actuals=True,
         )
     else:

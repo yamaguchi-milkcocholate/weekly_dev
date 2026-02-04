@@ -1020,89 +1020,22 @@ WARD_CENTER_COORDS = {
 
 ### クラス・関数一覧
 
-| モジュール                                          | 要素                              | 行番号  | 概要                                         |
-| --------------------------------------------------- | --------------------------------- | ------- | -------------------------------------------- |
-| `src/real_state_geo_core/data/fetcher.py`           | `RealEstateDataFetcher`           | 13-295  | データ取得統合クラス                         |
-| 同上                                                | `fetch_real_estate()`             | 31-67   | 不動産取引データAPI取得                      |
-| 同上                                                | `clean_real_estate_data()`        | 69-97   | DataFrame変換・クリーニング                  |
-| 同上                                                | `fetch_station_master()`          | 99-145  | 駅座標マスタ作成                             |
-| 同上                                                | `fetch_boundary_geojson()`        | 147-181 | 区境界GeoJSON取得                            |
-| 同上                                                | `geocode_random()`                | 183-208 | ランダム座標生成                             |
-| 同上                                                | `fetch_real_estate_multi_year()`  | 210-295 | 複数年データの並行取得 ✅ NEW                |
-| `src/real_state_geo_core/processing/aggregator.py` | `RealEstateAggregator`            | 8-382   | データ集計・統計分析クラス ✅ NEW            |
-| 同上                                                | `calculate_sqm_price()`           | 37-47   | ㎡単価計算 ✅ NEW                            |
-| 同上                                                | `calculate_tsubo_price()`         | 49-61   | 坪単価計算 ✅ NEW                            |
-| 同上                                                | `aggregate_by_region()`           | 63-162  | 地域別統計集計 ✅ NEW                        |
-| 同上                                                | `aggregate_by_region_timeseries()`| 164-286 | 時系列×地域別統計集計（前年比付き）✅ NEW    |
-| 同上                                                | `_calculate_yoy_change()`         | 288-346 | 前年比変化率計算（内部メソッド）✅ NEW       |
-| 同上                                                | `get_summary_statistics()`        | 348-382 | 全体統計サマリー取得 ✅ NEW                  |
-| `src/real_state_geo_core/visualization/pydeck.py`  | `convert_for_pydeck()`            | 4-41    | pydeck用データ変換                           |
-| `examples/timeseries_analysis_example.py`          | `main()`                          | —       | 時系列分析の使用例 ✅ NEW                    |
-| `notebooks/01_pydeck_experiment.ipynb`             | セル全体                          | —       | 統合可視化ワークフロー（実験用）             |
-
-### 使用例
-
-#### 基本的な使い方（単年データ取得）
-
-```python
-from real_state_geo_core.data.fetcher import RealEstateDataFetcher
-from real_state_geo_core.visualization.pydeck import convert_for_pydeck
-import os
-
-# 初期化
-fetcher = RealEstateDataFetcher(
-    api_key=os.getenv("REINFOLIB_API_KEY"),
-    mapbox_token=os.getenv("MAPBOX_TOKEN")
-)
-
-# データ取得
-api_response = fetcher.fetch_real_estate(year="2024", city_code="13103")
-df = fetcher.clean_real_estate_data(api_response)
-
-# 駅マスタ読み込み
-station_lookup = fetcher.fetch_station_master("data/station/station20251211free.csv")
-
-# 可視化用データ変換
-data_records = convert_for_pydeck(df)
-```
-
-#### 時系列分析の使い方 ✅ **NEW**
-
-```python
-from real_state_geo_core.data.fetcher import RealEstateDataFetcher
-from real_state_geo_core.processing.aggregator import RealEstateAggregator
-import os
-
-# データフェッチャーの初期化
-fetcher = RealEstateDataFetcher(api_key=os.getenv("REINFOLIB_API_KEY"))
-
-# 複数年データの並行取得（2020年～2024年、港区）
-multi_year_df = fetcher.fetch_real_estate_multi_year(
-    start_year=2020,
-    end_year=2024,
-    city_code="13103"
-)
-
-# Aggregatorの初期化
-aggregator = RealEstateAggregator(multi_year_df)
-
-# 時系列×地域別統計を計算（前年比付き）
-timeseries_stats = aggregator.aggregate_by_region_timeseries(
-    year_column="Year",
-    group_by="DistrictName",  # 地区名で集計
-    metrics=["mean", "median", "count"],
-    price_unit="both",  # ㎡単価と坪単価の両方
-    exclude_outliers=True,  # 外れ値除外
-    percentile_range=(0.05, 0.95),  # 上下5%を除外
-    calculate_yoy=True  # 前年比変化率を計算
-)
-
-# CSV保存
-timeseries_stats.write_csv("output/timeseries/stats.csv")
-
-# 特定地区の時系列推移を抽出
-akasaka_trend = timeseries_stats.filter(pl.col("DistrictName") == "赤坂")
-print(akasaka_trend.select(["Year", "price_per_sqm_mean", "price_per_sqm_mean_yoy_change"]))
-```
-
-詳細は `examples/timeseries_analysis_example.py` を参照してください。
+| モジュール                                         | 要素                               | 行番号  | 概要                                      |
+| -------------------------------------------------- | ---------------------------------- | ------- | ----------------------------------------- |
+| `src/real_state_geo_core/data/fetcher.py`          | `RealEstateDataFetcher`            | 13-295  | データ取得統合クラス                      |
+| 同上                                               | `fetch_real_estate()`              | 31-67   | 不動産取引データAPI取得                   |
+| 同上                                               | `clean_real_estate_data()`         | 69-97   | DataFrame変換・クリーニング               |
+| 同上                                               | `fetch_station_master()`           | 99-145  | 駅座標マスタ作成                          |
+| 同上                                               | `fetch_boundary_geojson()`         | 147-181 | 区境界GeoJSON取得                         |
+| 同上                                               | `geocode_random()`                 | 183-208 | ランダム座標生成                          |
+| 同上                                               | `fetch_real_estate_multi_year()`   | 210-295 | 複数年データの並行取得 ✅ NEW             |
+| `src/real_state_geo_core/processing/aggregator.py` | `RealEstateAggregator`             | 8-382   | データ集計・統計分析クラス ✅ NEW         |
+| 同上                                               | `calculate_sqm_price()`            | 37-47   | ㎡単価計算 ✅ NEW                         |
+| 同上                                               | `calculate_tsubo_price()`          | 49-61   | 坪単価計算 ✅ NEW                         |
+| 同上                                               | `aggregate_by_region()`            | 63-162  | 地域別統計集計 ✅ NEW                     |
+| 同上                                               | `aggregate_by_region_timeseries()` | 164-286 | 時系列×地域別統計集計（前年比付き）✅ NEW |
+| 同上                                               | `_calculate_yoy_change()`          | 288-346 | 前年比変化率計算（内部メソッド）✅ NEW    |
+| 同上                                               | `get_summary_statistics()`         | 348-382 | 全体統計サマリー取得 ✅ NEW               |
+| `src/real_state_geo_core/visualization/pydeck.py`  | `convert_for_pydeck()`             | 4-41    | pydeck用データ変換                        |
+| `examples/timeseries_analysis_example.py`          | `main()`                           | —       | 時系列分析の使用例 ✅ NEW                 |
+| `notebooks/01_pydeck_experiment.ipynb`             | セル全体                           | —       | 統合可視化ワークフロー（実験用）          |

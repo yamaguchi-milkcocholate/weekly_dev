@@ -6,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import GroupKFold
 
 
 def load_ml_dataset(csv_path: str) -> pl.DataFrame:
@@ -39,11 +39,15 @@ def load_ml_dataset(csv_path: str) -> pl.DataFrame:
 
     # 目的変数（坪単価）の欠損値・異常値を除去
     if "tsubo_price" in df.columns:
-        df = df.filter(
-            pl.col("tsubo_price").is_not_null()
-            & (pl.col("tsubo_price") > 0)
-            & (pl.col("tsubo_price") < 10_000_000)  # 上限1,000万円/坪
-        )
+        df = df.filter(pl.col("tsubo_price").is_not_null() & (pl.col("tsubo_price") > 0))
+
+        # 外れ値除去: 上位1%と下位1%を除外
+        lower_bound = df["tsubo_price"].quantile(0.01)
+        upper_bound = df["tsubo_price"].quantile(0.99)
+        logging.info(f"坪単価の範囲: {lower_bound:.2f} 〜 {upper_bound:.2f}")
+
+        df = df.filter((pl.col("tsubo_price") >= lower_bound) & (pl.col("tsubo_price") <= upper_bound))
+        logging.info(f"外れ値除去後のデータ件数: {df.height}件")
 
     # 数値カラムを適切な型に変換
     numeric_cols = ["CoverageRatio", "FloorAreaRatio", "Area", "Age", "BuildingYear", "TimeToNearestStation"]
@@ -56,6 +60,74 @@ def load_ml_dataset(csv_path: str) -> pl.DataFrame:
 
     logging.info(f"データセット読み込み完了: {df.height}件")
     return df
+
+
+def add_time_features(df: pl.DataFrame, date_col: str = "transaction_date") -> pl.DataFrame:
+    """
+    時点関連の特徴量を追加します。
+
+    Args:
+        df (pl.DataFrame): 元のDataFrame。
+        date_col (str, optional): 日付カラム名。デフォルトは"transaction_date"。
+
+    Returns:
+        pl.DataFrame: 時点特徴量を追加したDataFrame。
+    """
+    df = df.with_columns(
+        [
+            pl.col(date_col).dt.year().alias("Year"),
+            pl.col(date_col).dt.month().alias("Month"),
+            pl.col(date_col).dt.quarter().alias("Quarter"),
+        ]
+    )
+    return df
+
+
+def add_aggregated_features(
+    train_df: pl.DataFrame,
+    target_df: pl.DataFrame,
+    target_col: str = "tsubo_price",
+    agg_keys: list[str] | None = None,
+) -> pl.DataFrame:
+    """
+    年ごとの集約統計量を特徴量として追加します。
+
+    Args:
+        train_df (pl.DataFrame): 訓練データ（集約統計量の計算元）。
+        target_df (pl.DataFrame): 特徴量を追加する対象のDataFrame。
+        target_col (str, optional): 集約対象のカラム名。デフォルトは"tsubo_price"。
+        agg_keys (list[str], optional): 集約キーのリスト。デフォルトは["Municipality", "NearestStation"]。
+
+    Returns:
+        pl.DataFrame: 集約統計量を追加したDataFrame。
+    """
+    if agg_keys is None:
+        agg_keys = ["Municipality", "NearestStation"]
+
+    result_df = target_df
+
+    for key in agg_keys:
+        if key not in train_df.columns or key not in target_df.columns:
+            logging.warning(f"集約キー '{key}' が見つかりません。スキップします。")
+            continue
+
+        # 年ごとの平均値・中央値を計算
+        stats = (
+            train_df.group_by([key, "Year"])
+            .agg(
+                [
+                    pl.col(target_col).mean().alias(f"{key}_Year_mean_price"),
+                    pl.col(target_col).median().alias(f"{key}_Year_median_price"),
+                ]
+            )
+            .sort([key, "Year"])
+        )
+
+        # target_dfに結合（left join）
+        result_df = result_df.join(stats, on=[key, "Year"], how="left")
+
+    logging.info(f"集約統計量を追加しました: {agg_keys}")
+    return result_df
 
 
 def prepare_features(
@@ -88,34 +160,39 @@ def prepare_features(
     return X, y
 
 
-def create_time_series_split(
-    df: pl.DataFrame, n_splits: int = 5, test_year: int = 2025
-) -> tuple[pl.DataFrame, pl.DataFrame, TimeSeriesSplit]:
+def create_group_kfold_split(
+    df: pl.DataFrame, n_splits: int = 5, test_ratio: float = 0.2, group_col: str = "Municipality"
+) -> tuple[pl.DataFrame, pl.DataFrame, GroupKFold]:
     """
-    時系列交差検証用のデータ分割を行います。
+    GroupKFold交差検証用のデータ分割を行います。
 
     Args:
-        df (pl.DataFrame): 元のDataFrame（transaction_dateでソート済み）。
-        n_splits (int, optional): TimeSeriesSplitの分割数。デフォルトは5。
-        test_year (int, optional): テストデータとして分離する年。デフォルトは2025。
+        df (pl.DataFrame): 元のDataFrame。
+        n_splits (int, optional): GroupKFoldの分割数。デフォルトは5。
+        test_ratio (float, optional): テストデータの割合。デフォルトは0.2。
+        group_col (str, optional): グループ化するカラム名。デフォルトは"Municipality"。
 
     Returns:
-        Tuple[pl.DataFrame, pl.DataFrame, TimeSeriesSplit]:
-            (Train/Validデータ, Testデータ, TimeSeriesSplitオブジェクト)。
+        Tuple[pl.DataFrame, pl.DataFrame, GroupKFold]:
+            (Trainデータ, Testデータ, GroupKFoldオブジェクト)。
     """
-    # Year列を確認してホールドアウト分割
-    if "Year" in df.columns:
-        train_valid_df = df.filter(pl.col("Year") < test_year)
-        test_df = df.filter(pl.col("Year") == test_year)
-    else:
-        # Year列がない場合はtransaction_dateから判定
-        df = df.with_columns(pl.col("transaction_date").dt.year().alias("Year"))
-        train_valid_df = df.filter(pl.col("Year") < test_year)
-        test_df = df.filter(pl.col("Year") == test_year)
+    # ランダムにテストデータを分割（20%）
+    import numpy as np
 
-    logging.info(f"Train/Valid: {train_valid_df.height}件, Test: {test_df.height}件")
+    np.random.seed(42)
+    indices = np.arange(df.height)
+    np.random.shuffle(indices)
 
-    # TimeSeriesSplitを作成
-    tscv = TimeSeriesSplit(n_splits=n_splits, gap=0)
+    test_size = int(df.height * test_ratio)
+    test_indices = indices[:test_size]
+    train_indices = indices[test_size:]
 
-    return train_valid_df, test_df, tscv
+    test_df = df[test_indices]
+    train_df = df[train_indices]
+
+    logging.info(f"Train: {train_df.height}件, Test: {test_df.height}件")
+
+    # GroupKFoldを作成
+    gkf = GroupKFold(n_splits=n_splits)
+
+    return train_df, test_df, gkf
