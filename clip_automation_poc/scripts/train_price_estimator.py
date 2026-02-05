@@ -17,9 +17,11 @@
     outputs/feature_importance.csv - 特徴量重要度
     outputs/cv_metrics.csv - 交差検証メトリクス
     outputs/prediction_results.csv - テストデータの予測結果
+    outputs/price_estimator_model.pkl - 学習済みモデル
 """
 
 import logging
+import pickle
 
 from pathlib import Path
 
@@ -127,6 +129,13 @@ def main():
         )
     else:
         logging.warning("Testデータが空のため、評価をスキップします")
+
+    # ===== モデル保存 =====
+    model_path = OUTPUT_DIR / "price_estimator_model.pkl"
+    logging.info(f"\nモデルを保存中: {model_path}")
+    with open(model_path, "wb") as f:
+        pickle.dump(estimator.model, f)
+    logging.info("モデル保存完了")
 
     logging.info("\n=== 坪単価相場推定モデル学習完了 ===")
     logging.info(f"出力ディレクトリ: {OUTPUT_DIR}")

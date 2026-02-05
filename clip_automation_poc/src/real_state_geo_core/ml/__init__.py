@@ -2,6 +2,7 @@
 
 from real_state_geo_core.ml.data_loader import load_ml_dataset, prepare_features
 from real_state_geo_core.ml.hybrid_predictor import HybridPredictor
+from real_state_geo_core.ml.mesh_price_estimator import MeshPriceEstimator
 from real_state_geo_core.ml.prophet_analyzer import ProphetTrendAnalyzer
 from real_state_geo_core.ml.structure_analyzer import StructureAnalyzer
 
@@ -11,4 +12,5 @@ __all__ = [
     "ProphetTrendAnalyzer",
     "StructureAnalyzer",
     "HybridPredictor",
+    "MeshPriceEstimator",
 ]
