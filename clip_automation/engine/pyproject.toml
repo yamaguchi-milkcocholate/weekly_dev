@@ -1,0 +1,79 @@
+[project]
+name = "engine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.128.0",
+    "uvicorn>=0.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.10",
+]
+
+[tool.ruff]
+# 行の長さ制限
+line-length = 120
+
+# Pythonのターゲットバージョン
+target-version = "py313"
+
+# 有効にするルール
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+]
+
+# 無視するルール
+ignore = [
+    "E501",  # line too long (handled by line-length)
+]
+
+# 除外するファイル/ディレクトリ
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+[tool.ruff.format]
+# クォートスタイル
+quote-style = "double"
+
+# インデントスタイル
+indent-style = "space"
+
+# 行末での文字列の自動結合を行う
+skip-magic-trailing-comma = false
+
+[tool.ruff.isort]
+# importの順序
+known-first-party = ["app"]
+force-single-line = false
+lines-between-types = 1
