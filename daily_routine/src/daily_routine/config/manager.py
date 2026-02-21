@@ -12,7 +12,9 @@ from daily_routine.schemas.project import ProjectConfig
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DATA_ROOT = Path.home() / ".daily_routine"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_DATA_ROOT = _REPO_ROOT / "outputs"
+_DEFAULT_CONFIG_PATH = _REPO_ROOT / "configs" / "global.yaml"
 _ENV_PREFIX = "DAILY_ROUTINE_API_KEY_"
 
 
@@ -62,7 +64,7 @@ def _apply_env_overrides(api_keys: ApiKeys) -> ApiKeys:
 def load_global_config(path: Path | None = None) -> GlobalConfig:
     """グローバル設定を読み込む。環境変数でAPIキーをオーバーライド可能."""
     if path is None:
-        path = _DEFAULT_DATA_ROOT / "config.yaml"
+        path = _DEFAULT_CONFIG_PATH
 
     if path.exists():
         with open(path) as f:

@@ -19,11 +19,11 @@ uv run python -c "import daily_routine; print('OK')"
 
 ### 1.2 グローバル設定
 
-初回利用時に `~/.daily_routine/config.yaml` を作成する。
+グローバル設定ファイルはリポジトリ内の `configs/global.yaml` に配置されている。
 
 ```yaml
-# データ保存ルート
-data_root: ~/.daily_routine
+# データ保存ルート（リポジトリルートからの相対パスで解決される）
+data_root: outputs
 
 # APIキー（環境変数でもオーバーライド可能）
 api_keys:
@@ -39,7 +39,6 @@ defaults:
 # ロギング
 logging:
   level: INFO
-  file: ~/.daily_routine/logs/app.log
 ```
 
 APIキーは環境変数でも設定できる。環境変数が優先される。
@@ -70,7 +69,7 @@ uv run daily-routine init "OLの一日" --project-id my-project-001
 
 このコマンドで以下が作成される。
 
-- `~/.daily_routine/projects/{project_id}/config.yaml` — プロジェクト設定
+- `outputs/projects/{project_id}/config.yaml` — プロジェクト設定
 - 各レイヤーのデータディレクトリ（`intelligence/`, `scenario/`, `assets/`, `clips/`, `audio/`, `output/`）
 
 ### 2.3 パイプラインの実行（Phase 1 以降）
@@ -114,8 +113,7 @@ uv run pytest tests/test_cli.py -v
 プロジェクト初期化後のディレクトリ構造は以下の通り。
 
 ```
-~/.daily_routine/
-├── config.yaml                     # グローバル設定
+outputs/
 └── projects/
     └── {project_id}/
         ├── config.yaml             # プロジェクト設定

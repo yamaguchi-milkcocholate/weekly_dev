@@ -8,6 +8,7 @@ import yaml
 
 from daily_routine.config.manager import (
     GlobalConfig,
+    _REPO_ROOT,
     generate_project_id,
     init_project,
     load_global_config,
@@ -20,7 +21,7 @@ class TestLoadGlobalConfig:
 
     def test_default_values(self) -> None:
         config = load_global_config(Path("/nonexistent/path/config.yaml"))
-        assert config.data_root == Path.home() / ".daily_routine"
+        assert config.data_root == _REPO_ROOT / "outputs"
         assert config.api_keys.openai == ""
         assert config.defaults.output_fps == 30
 

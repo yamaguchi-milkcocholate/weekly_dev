@@ -1,0 +1,17 @@
+# データ保存ルート（リポジトリルートからの相対パスで解決される）
+data_root: outputs
+
+# APIキー（環境変数 DAILY_ROUTINE_API_KEY_{NAME} でオーバーライド可能）
+api_keys:
+  youtube_data_api: ""
+  openai: ""
+  google_ai: ""
+
+# デフォルトのプロジェクト設定
+defaults:
+  output_fps: 30
+  output_duration_range: [30, 60]
+
+# ロギング
+logging:
+  level: INFO
