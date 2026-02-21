@@ -1,0 +1,52 @@
+[project]
+name = "daily-routine"
+version = "0.1.0"
+description = "「〇〇の一日」AI動画生成パイプライン"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.0",
+    "typer>=0.9",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[project.optional-dependencies]
+poc-video = [
+    "httpx>=0.27",
+    "google-cloud-aiplatform>=1.60",
+    "google-cloud-storage>=2.18",
+    "openai>=1.30",
+]
+poc-image = [
+    "httpx>=0.27",
+    "langchain>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-google-genai>=2.0",
+    "langgraph>=0.2",
+]
+
+[project.scripts]
+daily-routine = "daily_routine.cli.app:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/daily_routine"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
