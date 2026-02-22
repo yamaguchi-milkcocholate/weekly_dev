@@ -511,7 +511,7 @@ def get_project_dir(global_config: GlobalConfig, project_id: str) -> Path:
     ...
 ```
 
-**環境変数オーバーライド:** APIキーは `DAILY_ROUTINE_API_KEY_OPENAI` のように `DAILY_ROUTINE_API_KEY_{NAME}` 形式の環境変数でもオーバーライド可能とする。これにより、設定ファイルにAPIキーを直接記載する必要がなくなる。
+**環境変数オーバーライド:** APIキーはプロジェクトルートの `.env` ファイル、または `DAILY_ROUTINE_API_KEY_{NAME}` 形式の環境変数で設定する。`load_global_config()` の先頭で `python-dotenv` により `.env` を読み込む。`export` で設定した環境変数は `.env` より優先される。
 
 ### 3.6 CLI骨格
 

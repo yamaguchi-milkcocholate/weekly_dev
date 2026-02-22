@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from daily_routine.schemas.project import ProjectConfig
@@ -62,7 +63,9 @@ def _apply_env_overrides(api_keys: ApiKeys) -> ApiKeys:
 
 
 def load_global_config(path: Path | None = None) -> GlobalConfig:
-    """グローバル設定を読み込む。環境変数でAPIキーをオーバーライド可能."""
+    """グローバル設定を読み込む。.envファイルと環境変数でAPIキーをオーバーライド可能."""
+    load_dotenv(_REPO_ROOT / ".env")
+
     if path is None:
         path = _DEFAULT_CONFIG_PATH
 

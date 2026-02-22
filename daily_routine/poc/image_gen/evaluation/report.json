@@ -1,0 +1,65 @@
+{
+  "title": "画像生成AI比較検証レポート",
+  "evaluation_method": {
+    "ai_evaluation": "Gemini による3枚セットの一貫性評価",
+    "scoring": {
+      "facial_consistency": "顔の一貫性 (重み: 30%)",
+      "outfit_consistency": "服装の一貫性 (重み: 20%)",
+      "style_consistency": "画風の一貫性 (重み: 30%)",
+      "overall_quality": "総合品質 (重み: 20%)"
+    }
+  },
+  "results": [
+    {
+      "ai_name": "Stability AI",
+      "model": "unknown",
+      "scores": {
+        "facial_consistency": 92,
+        "outfit_consistency": 85,
+        "style_consistency": 80,
+        "overall_quality": 88
+      },
+      "weighted_score": 86.19999999999999,
+      "reasoning": "顔立ちは特に1枚目と2枚目で目や眉の形状が酷似しており、同一人物としての説得力が非常に高いです。服装も基本構成（白ブラウス、ネイビースカート）は一貫していますが、腕時計のデザイン（メタルバンドと革バンド）の不一致や、2枚目のみ指輪が描写されている点など、細部に差異が見られます。画風はセミリアルなタッチで統一されていますが、2枚目だけ背景色がベージュでライティングも暖色系であるため、全体のトーンにばらつきがあります。総合的には設定を忠実に再現した高品質な生成結果です。",
+      "total_generation_time_sec": 0.0,
+      "total_cost_usd": 0,
+      "images_generated": 3
+    },
+    {
+      "ai_name": "Gemini",
+      "model": "unknown",
+      "scores": {
+        "facial_consistency": 60,
+        "outfit_consistency": 80,
+        "style_consistency": 20,
+        "overall_quality": 85
+      },
+      "weighted_score": 57.0,
+      "reasoning": "個々の画像の生成品質は高く、手足の破綻なども少ないため総合品質は高い。キャラクター設定（髪型、服装の色味など）も概ね反映されている。しかし、1枚目と3枚目がフォトリアル（写真）調であるのに対し、2枚目は明確にイラスト（絵画）調であり、画風・トーンの一貫性が著しく欠如している。また、2枚目はブラウスの襟形状が他の画像と異なり（1枚目は開襟、2枚目は詰まった襟）、ピアスのサイズも設定より大きめに描画されているなど、細部の整合性にも課題がある。",
+      "total_generation_time_sec": 0.0,
+      "total_cost_usd": 0,
+      "images_generated": 3
+    },
+    {
+      "ai_name": "DALL-E 3",
+      "model": "unknown",
+      "scores": {
+        "facial_consistency": 30,
+        "outfit_consistency": 50,
+        "style_consistency": 40,
+        "overall_quality": 75
+      },
+      "weighted_score": 46.0,
+      "reasoning": "3枚の画像は指定された属性（日本人女性、白ブラウス、紺スカート）を個別に満たしていますが、同一人物としての一貫性は著しく低いです。特に画風において、1・2枚目はセミリアル調ですが、3枚目はアニメ調のイラストになっており統一感がありません。顔立ちや髪の長さも画像ごとに異なり（ロングとボブが混在）、服装もブラウスの袖の形状やスカートの細部デザインが一致していません。個々の画像の生成品質は良好ですが、キャラクターの固定には成功していません。",
+      "total_generation_time_sec": 0.0,
+      "total_cost_usd": 0,
+      "images_generated": 3
+    }
+  ],
+  "ranking": [
+    "Stability AI",
+    "Gemini",
+    "DALL-E 3"
+  ],
+  "recommendation": "Stability AI"
+}

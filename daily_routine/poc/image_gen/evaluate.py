@@ -1,4 +1,4 @@
-"""GPT-4o Visionを使った画像生成AI評価ロジック."""
+"""Geminiを使った画像生成AI評価ロジック."""
 
 import base64
 import json
@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ JSONのみを出力してください。"""
 
 
 class AIEvaluationScore(BaseModel):
-    """GPT-4o Visionによる評価スコア."""
+    """Geminiによる評価スコア."""
 
     facial_consistency: int
     outfit_consistency: int
@@ -66,12 +66,12 @@ async def evaluate_image_set(
     image_paths: list[Path],
     api_key: str | None = None,
 ) -> AIEvaluationResult:
-    """3枚の画像セットをGPT-4o Visionで評価する."""
-    openai_api_key = api_key or os.environ.get("DAILY_ROUTINE_API_KEY_OPENAI", "")
+    """3枚の画像セットをGeminiで評価する."""
+    google_api_key = api_key or os.environ.get("DAILY_ROUTINE_API_KEY_GOOGLE_AI", "")
 
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        api_key=openai_api_key,
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3-pro-preview",
+        google_api_key=google_api_key,
         temperature=0.0,
     )
 
@@ -93,7 +93,12 @@ async def evaluate_image_set(
     response = await llm.ainvoke([message])
 
     # レスポンスからJSONを抽出
-    response_text = response.content.strip()
+    raw_content = response.content
+    if isinstance(raw_content, list):
+        response_text = "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in raw_content)
+    else:
+        response_text = raw_content
+    response_text = response_text.strip()
     if response_text.startswith("```"):
         response_text = response_text.split("```")[1]
         if response_text.startswith("json"):

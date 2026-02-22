@@ -41,13 +41,19 @@ logging:
   level: INFO
 ```
 
-APIキーは環境変数でも設定できる。環境変数が優先される。
+APIキーはプロジェクトルートの `.env` ファイルで設定する。`.env.example` をコピーして使用する。
 
 ```bash
-export DAILY_ROUTINE_API_KEY_OPENAI="sk-..."
-export DAILY_ROUTINE_API_KEY_GOOGLE_AI="..."
-export DAILY_ROUTINE_API_KEY_YOUTUBE_DATA_API="..."
+cp .env.example .env
 ```
+
+```dotenv
+DAILY_ROUTINE_API_KEY_OPENAI=sk-...
+DAILY_ROUTINE_API_KEY_GOOGLE_AI=...
+DAILY_ROUTINE_API_KEY_YOUTUBE_DATA_API=...
+```
+
+`export` で設定した環境変数は `.env` より優先される。
 
 ## 2. CLI の利用
 

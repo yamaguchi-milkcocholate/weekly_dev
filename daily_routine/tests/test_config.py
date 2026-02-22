@@ -1,19 +1,33 @@
 """config/manager.py のテスト."""
 
-import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 from daily_routine.config.manager import (
-    GlobalConfig,
     _REPO_ROOT,
+    GlobalConfig,
     generate_project_id,
     init_project,
     load_global_config,
     load_project_config,
 )
+
+_ENV_KEYS = [
+    "DAILY_ROUTINE_API_KEY_OPENAI",
+    "DAILY_ROUTINE_API_KEY_GOOGLE_AI",
+    "DAILY_ROUTINE_API_KEY_STABILITY",
+    "DAILY_ROUTINE_API_KEY_YOUTUBE_DATA_API",
+]
+
+
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """テスト中は .env 由来の環境変数を除去し、load_dotenv を無効化する."""
+    for key in _ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr("daily_routine.config.manager.load_dotenv", lambda *a, **kw: None)
 
 
 class TestLoadGlobalConfig:
@@ -41,23 +55,52 @@ class TestLoadGlobalConfig:
         assert config.api_keys.openai == "sk-test"
         assert config.defaults.output_fps == 60
 
-    def test_env_override(self) -> None:
-        os.environ["DAILY_ROUTINE_API_KEY_OPENAI"] = "env-key-123"
-        try:
-            config = load_global_config(Path("/nonexistent/path/config.yaml"))
-            assert config.api_keys.openai == "env-key-123"
-        finally:
-            del os.environ["DAILY_ROUTINE_API_KEY_OPENAI"]
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DAILY_ROUTINE_API_KEY_OPENAI", "env-key-123")
+        config = load_global_config(Path("/nonexistent/path/config.yaml"))
+        assert config.api_keys.openai == "env-key-123"
 
-    def test_env_override_takes_precedence(self, tmp_path: Path) -> None:
+    def test_env_override_takes_precedence(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         config_path = tmp_path / "config.yaml"
         config_path.write_text(yaml.dump({"api_keys": {"openai": "yaml-key"}}))
-        os.environ["DAILY_ROUTINE_API_KEY_OPENAI"] = "env-key"
-        try:
-            config = load_global_config(config_path)
-            assert config.api_keys.openai == "env-key"
-        finally:
-            del os.environ["DAILY_ROUTINE_API_KEY_OPENAI"]
+        monkeypatch.setenv("DAILY_ROUTINE_API_KEY_OPENAI", "env-key")
+        config = load_global_config(config_path)
+        assert config.api_keys.openai == "env-key"
+
+
+class TestDotenvLoading:
+    """.env ファイル読み込みのテスト."""
+
+    def test_dotenv_loads_api_key(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`.env` ファイルに記載したAPIキーが読み込まれる."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("DAILY_ROUTINE_API_KEY_OPENAI=dotenv-key-abc\n")
+
+        from dotenv import load_dotenv
+
+        # autouse フィクスチャの無効化を解除して実際に .env を読み込む
+        monkeypatch.setattr(
+            "daily_routine.config.manager.load_dotenv",
+            lambda *a, **kw: load_dotenv(env_file, override=True),
+        )
+        config = load_global_config(Path("/nonexistent/path/config.yaml"))
+        assert config.api_keys.openai == "dotenv-key-abc"
+
+    def test_export_overrides_dotenv(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`export` で設定した環境変数が `.env` より優先される."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("DAILY_ROUTINE_API_KEY_OPENAI=dotenv-key\n")
+
+        from dotenv import load_dotenv
+
+        # load_dotenv は既存の環境変数を上書きしない（override=False がデフォルト）
+        monkeypatch.setenv("DAILY_ROUTINE_API_KEY_OPENAI", "export-key")
+        monkeypatch.setattr(
+            "daily_routine.config.manager.load_dotenv",
+            lambda *a, **kw: load_dotenv(env_file),
+        )
+        config = load_global_config(Path("/nonexistent/path/config.yaml"))
+        assert config.api_keys.openai == "export-key"
 
 
 class TestInitProject:

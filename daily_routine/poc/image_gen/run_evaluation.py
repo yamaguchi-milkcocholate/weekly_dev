@@ -81,8 +81,8 @@ async def generate_images(state: EvaluationState) -> dict:
 
 
 async def evaluate_images(state: EvaluationState) -> dict:
-    """GPT-4o Visionで全AIの画像を評価するノード."""
-    logger.info("=== GPT-4o Vision 評価開始 ===")
+    """Geminiで全AIの画像を評価するノード."""
+    logger.info("=== Gemini 評価開始 ===")
 
     results = await evaluate_all(GENERATED_DIR)
     evaluation_results = [r.model_dump(mode="json") for r in results]
@@ -141,7 +141,7 @@ async def generate_report(state: EvaluationState) -> dict:
     report = {
         "title": "画像生成AI比較検証レポート",
         "evaluation_method": {
-            "ai_evaluation": "GPT-4o Vision による3枚セットの一貫性評価",
+            "ai_evaluation": "Gemini による3枚セットの一貫性評価",
             "scoring": {
                 "facial_consistency": "顔の一貫性 (重み: 30%)",
                 "outfit_consistency": "服装の一貫性 (重み: 20%)",
@@ -249,6 +249,9 @@ def main() -> None:
     """CLIエントリーポイント."""
     import argparse
 
+    from dotenv import load_dotenv
+
+    load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
     parser = argparse.ArgumentParser(description="画像生成AI比較検証")
