@@ -78,7 +78,7 @@ Midjourneyを使い、以下の仕様で1キャラクター分の画像を手動
 |------|------|
 | モデル | `kling-v2-5-turbo`（Image-to-Video対応、コスト効率良） |
 | エンドポイント | `POST https://api.klingai.com/v1/videos/image2video` |
-| 認証 | Bearer Token |
+| 認証 | Access Key + Secret Key によるJWT認証 |
 | 画像入力 | URL指定（事前にホスティング必要） |
 | 動画長 | 5秒 |
 | 推定コスト | $0.21（5秒 Standard） |

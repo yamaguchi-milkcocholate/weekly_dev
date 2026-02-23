@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://api.dev.runwayml.com/v1"
 _COST_PER_SEC = 0.05
 
+# Runway APIはピクセル比で指定する（"9:16" 等の一般的な比率は不可）
+_ASPECT_RATIO_MAP = {
+    "16:9": "1280:720",
+    "9:16": "720:1280",
+    "4:3": "1104:832",
+    "3:4": "832:1104",
+    "1:1": "960:960",
+    "21:9": "1584:672",
+}
+
 
 class RunwayClient(VideoGeneratorClient):
     """Runway Gen-4 Turbo クライアント."""
@@ -33,7 +43,7 @@ class RunwayClient(VideoGeneratorClient):
             "model": self.model,
             "promptImage": image_url,
             "promptText": request.prompt,
-            "ratio": request.aspect_ratio,
+            "ratio": _ASPECT_RATIO_MAP.get(request.aspect_ratio, request.aspect_ratio),
             "duration": duration_sec,
         }
 

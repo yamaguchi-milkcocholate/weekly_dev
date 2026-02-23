@@ -1,0 +1,77 @@
+{
+  "ai": "veo",
+  "frame_scores": [
+    {
+      "face_similarity": 10,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 10,
+      "overall_identity": 10,
+      "reasoning": "2枚の画像は顔の特徴、髪型、服装、体型、プロポーションの全てにおいて完全に一致しており、同一人物であると判断できます。",
+      "frame": "frame_001.png"
+    },
+    {
+      "face_similarity": 10,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 10,
+      "overall_identity": 10,
+      "reasoning": "両画像は同一人物であり、顔の特徴、髪型、髪色、服装、体型・プロポーションの全てにおいて完璧に一致しています。2枚目の画像は1枚目の画像とほぼ同じ構図で、わずかなポーズの違いと手に持ったカップ以外に差異は見られません。",
+      "frame": "frame_002.png"
+    },
+    {
+      "face_similarity": 9,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔、髪型、服装、体型すべてにおいて高い一致度が見られ、キャラクターの同一性が非常に良く保たれています。AI生成画像はわずかにブレがあるものの、リファレンス画像の特徴を忠実に再現しています。",
+      "frame": "frame_003.png"
+    },
+    {
+      "face_similarity": 9,
+      "hair_consistency": 10,
+      "outfit_consistency": 9,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔の特徴、髪型、髪色、服装（シャツとスカート）は非常に高い一致度を示しています。全体的なプロポーションも維持されており、同一人物として認識できます。AI生成画像はややぼやけており、靴が見えない点がわずかな減点要因です。",
+      "frame": "frame_004.png"
+    },
+    {
+      "face_similarity": 9,
+      "hair_consistency": 10,
+      "outfit_consistency": 9,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔の特徴、髪型、髪色、服装（シャツとスカート）は非常に高い一致度を示しています。体型・プロポーションも一貫しており、キャラクターの同一性が非常に良く保たれています。",
+      "frame": "frame_005.png"
+    },
+    {
+      "face_similarity": 10,
+      "hair_consistency": 10,
+      "outfit_consistency": 8,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔と髪型・髪色はほぼ完璧に一致しており、キャラクターの同一性が非常に高い。服装は主要な要素は一致するものの、スカートの細部にわずかな違いがあり、靴が確認できない。体型は一貫している。",
+      "frame": "frame_006.png"
+    },
+    {
+      "face_similarity": 10,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 10,
+      "reasoning": "両画像は同一人物であり、顔の特徴、髪型、髪色、服装（シャツとスカート）が完全に一致しています。2枚目の画像は下半身が一部切れていますが、見える範囲では体型も一致しています。",
+      "frame": "frame_007.png"
+    },
+    {
+      "face_similarity": 10,
+      "hair_consistency": 9,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 10,
+      "reasoning": "顔の特徴、髪型、服装の全てにおいて非常に高い一致度が見られ、同一人物として認識できます。髪の毛のわずかなスタイリングの違いを除けば、完璧に近い再現度です。",
+      "frame": "frame_008.png"
+    }
+  ]
+}

@@ -17,8 +17,9 @@ uv sync --extra poc-video
 ### 2.2 環境変数の設定
 
 ```bash
-# Kling AI
-export DAILY_ROUTINE_API_KEY_KLING="your-key"
+# Kling AI（Access Key + Secret Key によるJWT認証）
+export DAILY_ROUTINE_API_KEY_KLING_AK="your-access-key"
+export DAILY_ROUTINE_API_KEY_KLING_SK="your-secret-key"
 
 # Luma Dream Machine
 export DAILY_ROUTINE_API_KEY_LUMA="your-key"

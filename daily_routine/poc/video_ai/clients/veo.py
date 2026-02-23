@@ -47,7 +47,7 @@ class VeoClient(VideoGeneratorClient):
             "instances": [
                 {
                     "prompt": request.prompt,
-                    "image": {"bytesBase64Encoded": image_b64},
+                    "image": {"bytesBase64Encoded": image_b64, "mimeType": "image/png"},
                 }
             ],
             "parameters": {
@@ -88,10 +88,12 @@ class VeoClient(VideoGeneratorClient):
         )
 
     async def _poll_operation(self, client: httpx.AsyncClient, operation_name: str, headers: dict) -> str:
-        poll_url = f"https://{self.location}-aiplatform.googleapis.com/v1/{operation_name}"
+        poll_url = f"{self._base_url}:fetchPredictOperation"
         for _ in range(120):
             await asyncio.sleep(10)
-            resp = await client.get(poll_url, headers=headers)
+            resp = await client.post(
+                poll_url, json={"operationName": operation_name}, headers=headers
+            )
             resp.raise_for_status()
             data = resp.json()
             if data.get("done"):

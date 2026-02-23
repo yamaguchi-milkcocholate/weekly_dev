@@ -48,9 +48,13 @@ cp .env.example .env
 ```
 
 ```dotenv
-DAILY_ROUTINE_API_KEY_OPENAI=sk-...
-DAILY_ROUTINE_API_KEY_GOOGLE_AI=...
-DAILY_ROUTINE_API_KEY_YOUTUBE_DATA_API=...
+DAILY_ROUTINE_API_KEY_STABILITY=your-stability-key
+DAILY_ROUTINE_API_KEY_OPENAI=your-openai-key
+DAILY_ROUTINE_API_KEY_GOOGLE_AI=your-google-ai-key
+DAILY_ROUTINE_API_KEY_KLING_AK=your-kling-access-key
+DAILY_ROUTINE_API_KEY_KLING_SK=your-kling-secret-key
+DAILY_ROUTINE_API_KEY_LUMA=your-luma-key
+DAILY_ROUTINE_API_KEY_RUNWAY=your-runway-key
 ```
 
 `export` で設定した環境変数は `.env` より優先される。

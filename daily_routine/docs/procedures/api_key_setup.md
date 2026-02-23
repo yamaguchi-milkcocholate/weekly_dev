@@ -4,11 +4,17 @@
 
 本プロジェクトで使用する外部APIキーの取得方法と設定方法をまとめる。
 
-| 環境変数                          | サービス           | 用途                 |
-| --------------------------------- | ------------------ | -------------------- |
-| `DAILY_ROUTINE_API_KEY_STABILITY` | Stability AI       | 画像生成             |
-| `DAILY_ROUTINE_API_KEY_OPENAI`    | OpenAI             | 画像生成（DALL-E 3） |
-| `DAILY_ROUTINE_API_KEY_GOOGLE_AI` | Google AI (Gemini) | 画像生成・評価       |
+| 環境変数                          | サービス           | 用途                                        |
+| --------------------------------- | ------------------ | ------------------------------------------- |
+| `DAILY_ROUTINE_API_KEY_STABILITY` | Stability AI       | 画像生成                                    |
+| `DAILY_ROUTINE_API_KEY_OPENAI`    | OpenAI             | 画像生成（DALL-E 3）/ 評価（GPT-4o Vision） |
+| `DAILY_ROUTINE_API_KEY_GOOGLE_AI` | Google AI (Gemini) | 画像生成・評価                              |
+| `DAILY_ROUTINE_API_KEY_KLING_AK`  | Kling AI           | 動画生成（T0-2 PoC）— Access Key            |
+| `DAILY_ROUTINE_API_KEY_KLING_SK`  | Kling AI           | 動画生成（T0-2 PoC）— Secret Key            |
+| `DAILY_ROUTINE_API_KEY_LUMA`      | Luma Dream Machine | 動画生成（T0-2 PoC）                        |
+| `DAILY_ROUTINE_API_KEY_RUNWAY`    | Runway             | 動画生成（T0-2 PoC）                        |
+
+> **Google Veo** は GCP サービスアカウント認証を使用する（`gcloud auth login` で認証）。
 
 ## 2. APIキーの作成
 
@@ -32,7 +38,37 @@
 
 - https://platform.openai.com/api-keys
 
-### 2.3 Google AI (Gemini)
+### 2.3 Kling AI
+
+Kling AI は **Access Key (AK)** と **Secret Key (SK)** の2つを使用した JWT 認証方式を採用している。
+
+1. https://klingai.com/global/dev にアクセスする
+2. アカウントを作成・ログインする
+3. https://app.klingai.com/global/dev/api-key に移動する
+4. 「Create API Key」をクリックする
+5. **Access Key** と **Secret Key** の両方をコピーする
+
+- https://app.klingai.com/global/dev/api-key
+
+### 2.4 Luma Dream Machine
+
+1. https://lumalabs.ai/dream-machine にアクセスする
+2. アカウントを作成・ログインする
+3. https://lumalabs.ai/dream-machine/api/keys に移動する
+4. APIキーを作成しコピーする
+
+- https://lumalabs.ai/api/keys
+
+### 2.5 Runway
+
+1. https://dev.runwayml.com/ にアクセスする
+2. アカウントを作成・ログインする
+3. API Keysページに移動する
+4. APIキーを作成しコピーする
+
+- https://dev.runwayml.com/organization/b0dc8ac0-feb7-42e9-b86d-c043546e4362/api-keys
+
+### 2.6 Google AI (Gemini)
 
 1. https://aistudio.google.com/ にアクセスする
 2. Google アカウントでサインインする
@@ -54,6 +90,10 @@ cp .env.example .env
 DAILY_ROUTINE_API_KEY_STABILITY=your-stability-key
 DAILY_ROUTINE_API_KEY_OPENAI=your-openai-key
 DAILY_ROUTINE_API_KEY_GOOGLE_AI=your-google-ai-key
+DAILY_ROUTINE_API_KEY_KLING_AK=your-kling-access-key
+DAILY_ROUTINE_API_KEY_KLING_SK=your-kling-secret-key
+DAILY_ROUTINE_API_KEY_LUMA=your-luma-key
+DAILY_ROUTINE_API_KEY_RUNWAY=your-runway-key
 ```
 
 `.env` ファイルは `.gitignore` に登録されているため、リポジトリにコミットされない。

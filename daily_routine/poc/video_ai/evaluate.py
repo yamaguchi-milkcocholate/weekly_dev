@@ -1,6 +1,6 @@
 """LLMベースのキャラクター同一性評価スクリプト.
 
-GPT-4o Visionでリファレンス画像と抽出フレームを比較し、
+Gemini (Google AI) でリファレンス画像と抽出フレームを比較し、
 同一性スコアをJSON形式で出力する。
 
 Usage:
@@ -15,7 +15,7 @@ import logging
 import os
 from pathlib import Path
 
-from openai import AsyncOpenAI
+import httpx
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -47,42 +47,61 @@ def _encode_image(path: Path) -> str:
 
 
 async def evaluate_frame(
-    client: AsyncOpenAI,
+    api_key: str,
     reference_path: Path,
     frame_path: Path,
+    http_client: httpx.AsyncClient,
 ) -> dict:
     """1フレームをリファレンス画像と比較評価する."""
     ref_b64 = _encode_image(reference_path)
     frame_b64 = _encode_image(frame_path)
 
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        "models/gemini-2.5-flash:generateContent"
+        f"?key={api_key}"
+    )
+
+    payload = {
+        "contents": [
             {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": EVALUATION_PROMPT},
+                "parts": [
+                    {"text": EVALUATION_PROMPT},
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{ref_b64}", "detail": "high"},
+                        "inlineData": {
+                            "mimeType": "image/png",
+                            "data": ref_b64,
+                        }
                     },
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{frame_b64}", "detail": "high"},
+                        "inlineData": {
+                            "mimeType": "image/png",
+                            "data": frame_b64,
+                        }
                     },
                 ],
             }
         ],
-        max_tokens=500,
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0,
+        },
+    }
 
-    raw = response.choices[0].message.content
+    resp = await http_client.post(url, json=payload)
+    resp.raise_for_status()
+    data = resp.json()
+
+    raw = data["candidates"][0]["content"]["parts"][0]["text"]
     return json.loads(raw)
 
 
-async def evaluate_ai(client: AsyncOpenAI, ai_name: str, reference_path: Path) -> dict:
+async def evaluate_ai(
+    api_key: str,
+    ai_name: str,
+    reference_path: Path,
+    http_client: httpx.AsyncClient,
+) -> dict:
     """1つのAIの全フレームを評価する."""
     frames_dir = BASE_DIR / "frames" / ai_name
     frames = sorted(frames_dir.glob("frame_*.png"))
@@ -96,7 +115,7 @@ async def evaluate_ai(client: AsyncOpenAI, ai_name: str, reference_path: Path) -
 
     for frame in frames:
         logger.info("  evaluating %s", frame.name)
-        score = await evaluate_frame(client, reference_path, frame)
+        score = await evaluate_frame(api_key, reference_path, frame, http_client)
         score["frame"] = frame.name
         frame_scores.append(score)
 
@@ -104,12 +123,11 @@ async def evaluate_ai(client: AsyncOpenAI, ai_name: str, reference_path: Path) -
 
 
 async def main(ais: list[str]) -> None:
-    api_key = os.environ.get("DAILY_ROUTINE_API_KEY_OPENAI") or os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("DAILY_ROUTINE_API_KEY_GOOGLE_AI")
     if not api_key:
-        logger.error("DAILY_ROUTINE_API_KEY_OPENAI or OPENAI_API_KEY not set")
+        logger.error("DAILY_ROUTINE_API_KEY_GOOGLE_AI not set")
         return
 
-    client = AsyncOpenAI(api_key=api_key)
     reference_path = BASE_DIR / "reference" / "front.png"
     if not reference_path.exists():
         logger.error("Reference image not found: %s", reference_path)
@@ -118,11 +136,12 @@ async def main(ais: list[str]) -> None:
     eval_dir = BASE_DIR / "evaluation"
     eval_dir.mkdir(parents=True, exist_ok=True)
 
-    for ai in ais:
-        result = await evaluate_ai(client, ai, reference_path)
-        output_path = eval_dir / f"{ai}_scores.json"
-        output_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
-        logger.info("%s: scores saved -> %s", ai, output_path)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as http_client:
+        for ai in ais:
+            result = await evaluate_ai(api_key, ai, reference_path, http_client)
+            output_path = eval_dir / f"{ai}_scores.json"
+            output_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
+            logger.info("%s: scores saved -> %s", ai, output_path)
 
     logger.info("Evaluation complete.")
 
