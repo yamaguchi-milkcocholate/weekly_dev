@@ -175,7 +175,7 @@ uv run python poc/video_ai/compare.py
 
 ### ステップ8: ADR 作成
 
-評価結果に基づき `docs/adrs/001_video_generation_ai.md` を作成する。
+評価結果に基づき `docs/adrs/001_video_generation_ai.md` を作成する（※T0-2検証完了後に作成予定。現時点では未作成）。
 
 ## 4. 出力ファイル一覧
 

@@ -99,8 +99,7 @@ daily_routine/                  # リポジトリルート
 仕様書6.1章をベースに、チェックポイント状態管理用のファイルを追加する。
 
 ```
-{data_root}/                        # グローバル設定で指定（デフォルト: ~/.daily_routine/）
-├── config.yaml                     # グローバル設定
+{data_root}/                        # グローバル設定で指定（デフォルト: outputs/）
 └── projects/
     └── {project_id}/
         ├── config.yaml             # プロジェクト設定
@@ -434,13 +433,13 @@ class FinalOutput(BaseModel):
 
 ### 3.5 設定管理
 
-#### グローバル設定 (`~/.daily_routine/config.yaml`)
+#### グローバル設定 (`configs/global.yaml`)
 
 ```yaml
-# データ保存ルート
-data_root: ~/.daily_routine
+# データ保存ルート（リポジトリルートからの相対パスで解決される）
+data_root: outputs
 
-# APIキー（環境変数でもオーバーライド可能）
+# APIキー（環境変数 DAILY_ROUTINE_API_KEY_{NAME} でオーバーライド可能）
 api_keys:
   youtube_data_api: ""
   openai: ""
@@ -455,7 +454,6 @@ defaults:
 # ロギング
 logging:
   level: INFO
-  file: ~/.daily_routine/logs/app.log
 ```
 
 #### 設定管理 (`config/manager.py`)
@@ -472,8 +470,7 @@ class ApiKeys(BaseModel):
     openai: str = ""
     google_ai: str = ""
 
-    class Config:
-        extra = "allow"  # ADRで追加されるAPIキーに対応
+    model_config = {"extra": "allow"}  # ADRで追加されるAPIキーに対応
 
 
 class LoggingConfig(BaseModel):
@@ -490,7 +487,7 @@ class DefaultsConfig(BaseModel):
 
 class GlobalConfig(BaseModel):
     """グローバル設定"""
-    data_root: Path = Path.home() / ".daily_routine"
+    data_root: Path = Path(__file__).resolve().parents[3] / "outputs"
     api_keys: ApiKeys = Field(default_factory=ApiKeys)
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -511,7 +508,7 @@ def get_project_dir(global_config: GlobalConfig, project_id: str) -> Path:
     ...
 ```
 
-**環境変数オーバーライド:** APIキーはプロジェクトルートの `.env` ファイル、または `DAILY_ROUTINE_API_KEY_{NAME}` 形式の環境変数で設定する。`load_global_config()` の先頭で `python-dotenv` により `.env` を読み込む。`export` で設定した環境変数は `.env` より優先される。
+**環境変数オーバーライド:** APIキーはプロジェクトルートの `.env` ファイル、または `DAILY_ROUTINE_API_KEY_{NAME}` 形式の環境変数で設定する。`load_global_config()` の先頭で `python-dotenv` により `.env` を読み込む。`export` で設定した環境変数は `.env` より優先される。グローバル設定ファイルはリポジトリ内の `configs/global.yaml` に配置し、デフォルトの `data_root` は `outputs/`（リポジトリルートからの相対パス）を使用する。
 
 ### 3.6 CLI骨格
 

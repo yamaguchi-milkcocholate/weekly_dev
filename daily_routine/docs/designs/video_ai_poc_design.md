@@ -6,7 +6,7 @@
 - **サブタスクID:** T0-2
 - **このサブタスクで実現すること:**
   - 4つの動画生成AI（Google Veo / Kling / Luma / Runway）に対し、同一のリファレンス画像を入力してImage-to-Video生成を行い、**キャラクター同一性の維持精度**を定量評価する
-  - 評価結果に基づき、本パイプラインで採用する動画生成AIを選定し、ADR（`/docs/adrs/001_video_generation_ai.md`）として記録する
+  - 評価結果に基づき、本パイプラインで採用する動画生成AIを選定し、ADR（`/docs/adrs/001_video_generation_ai.md`）として記録する（※T0-2検証完了後に作成予定）
 
 ## 2. スコープ
 
