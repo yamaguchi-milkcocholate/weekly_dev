@@ -42,11 +42,12 @@
 src/daily_routine/visual/
 ├── __init__.py
 ├── base.py              # VisualEngine ABC（レイヤー境界）
-├── engine.py            # DefaultVisualEngine 具象実装 + ファクトリ関数
+├── engine.py            # DefaultVisualEngine 具象実装 + ファクトリ関数（キーフレーム生成は Keyframe Engine の責務）
 └── clients/
     ├── __init__.py
-    ├── base.py          # VideoGeneratorClient ABC
-    └── runway.py        # Runway Gen-4 Turbo クライアント（本番用）
+    ├── base.py          # VideoGeneratorClient ABC + ImageGeneratorClient ABC
+    ├── runway.py        # Runway Gen-4 Turbo クライアント（動画生成、本番用）
+    └── gen4_image.py    # RunwayImageClient（画像生成、新規。Keyframe Engine が使用）
 
 src/daily_routine/utils/
 └── uploader.py          # ImageUploader ABC + GcsUploader（画像の GCS アップロード）
@@ -291,8 +292,8 @@ class DefaultVisualEngine(VisualEngine):
 
         Args:
             scene_number: シーン番号
-            prompt: SceneSpec.video_prompt
-            reference_image: キャラクターの正面画像パス
+            prompt: SceneSpec.motion_prompt
+            reference_image: キーフレーム画像パス（KeyframeAsset.image_path）
             output_path: 動画ファイルの保存先パス
 
         Returns:
@@ -303,14 +304,14 @@ class DefaultVisualEngine(VisualEngine):
 
 **リファレンス画像の選択ロジック:**
 
-各シーンで使用するリファレンス画像は、Asset Generator の出力からキャラクターの正面画像（`front_view`）を使用する。
+各シーンで使用するリファレンス画像は、Keyframe Engine が生成したキーフレーム画像（`KeyframeAsset.image_path`）を使用する。キーフレーム画像はシーンごとに異なり、シーンの場所・状況にキャラクターを配置した構図になっている。
 
 ```
-SceneSpec → (シーン内容に登場する)キャラクター名 → CharacterAsset.front_view
+SceneSpec → scene_number → KeyframeAsset.image_path（シーンごとのキーフレーム画像）
 ```
 
-- シーンに複数キャラクターが登場する場合: メインキャラクター（`Scenario.characters[0]`）の正面画像を使用
-- 仕様書 3.5章: 「リファレンス画像を全シーンで同一の参照画像として動画生成AIに入力する」に準拠
+- Keyframe Engine が KEYFRAME ステップで事前に生成し、チェックポイントでユーザー承認済み
+- `_find_keyframe()` ヘルパーメソッドで `assets.keyframes` から `scene_number` に対応するキーフレーム画像を取得
 
 **順次処理の理由:**
 
@@ -388,8 +389,8 @@ class ApiKeys(BaseModel):
 | エラー種別                         | 対応                                                       |
 | ---------------------------------- | ---------------------------------------------------------- |
 | API レート制限（429）              | 指数バックオフリトライ（`tenacity`、最大3回、初回待機5秒） |
-| API タイムアウト（ポーリング超過） | `TimeoutError` を `StepExecutionError` にラップして伝播    |
-| 動画未生成（API が動画を返さない） | リトライ（最大3回）後、`StepExecutionError` で停止         |
+| API タイムアウト（ポーリング超過） | `TimeoutError` で即時停止（リトライ対象外）                |
+| 動画未生成（API が動画を返さない） | `RuntimeError` で即時停止                                  |
 | GCP設定未設定                      | 起動時に `ValueError` で即時停止                           |
 | リファレンス画像が存在しない       | `FileNotFoundError` で即時停止                             |
 | 不明なプロバイダ指定               | `ValueError` で即時停止                                    |
@@ -402,11 +403,13 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=5, min=5, max=60),
-    retry=retry_if_exception_type((httpx.HTTPStatusError, TimeoutError)),
+    retry=retry_if_exception_type(httpx.HTTPStatusError),
 )
-async def _call_api(...):
+async def generate(...):
     ...
 ```
+
+> **実装時の判断:** `TimeoutError` をリトライ対象から除外した。ポーリングタイムアウト（5分）が発生した場合、リトライすると最大15分待つことになり、実用的でないため。リトライ対象は API レート制限（429）等の `httpx.HTTPStatusError` のみとした。
 
 ## 4. スキーマ設計
 
@@ -462,13 +465,13 @@ class VideoClipSet(BaseModel):
 | ソース          | データ                                     | スキーマ                    |
 | --------------- | ------------------------------------------ | --------------------------- |
 | Scenario Engine | シナリオ（シーン一覧、動画生成プロンプト） | `schemas.scenario.Scenario` |
-| Asset Generator | アセットセット（キャラクター画像パス）     | `schemas.asset.AssetSet`    |
+| Keyframe Engine | アセットセット（キーフレーム画像パス含む） | `schemas.asset.AssetSet`    |
 | 設定            | プロバイダ選択、GCP設定                    | `GlobalConfig.visual`       |
 
 **入力データの関係:**
 
-- **動画生成プロンプト:** `SceneSpec.video_prompt`（Scenario Engine が生成済み）
-- **リファレンス画像:** `CharacterAsset.front_view`（Asset Generator が生成済み）
+- **動画生成プロンプト:** `SceneSpec.motion_prompt`（Scenario Engine が生成済み）
+- **リファレンス画像:** `KeyframeAsset.image_path`（Keyframe Engine が生成済み、シーンごと）
 - **出力先ディレクトリ:** `projects/{project_id}/clips/`
 
 ### 出力
@@ -522,7 +525,8 @@ projects/{project_id}/clips/
       "camera_work": { "type": "wide", "description": "全身が映るワイドショット" },
       "caption_text": "AM 7:30 出勤",
       "image_prompt": "Modern apartment entrance, morning sunlight, urban residential area",
-      "video_prompt": "A young Japanese woman in a white blouse and navy skirt walks out of a modern apartment entrance in the morning sunlight, wide shot, smooth walking motion"
+      "keyframe_prompt": "@char stands at a modern apartment entrance in the morning sunlight, wearing a white blouse and navy skirt, holding a tote bag, wide shot composition, bright and airy",
+      "motion_prompt": "She walks out of the apartment entrance into the morning sunlight with a brisk pace, wide shot, smooth walking motion"
     },
     {
       "scene_number": 2,
@@ -531,7 +535,8 @@ projects/{project_id}/clips/
       "camera_work": { "type": "close-up", "description": "上半身のクローズアップ" },
       "caption_text": "毎朝のルーティン",
       "image_prompt": "Modern cafe interior, warm lighting, counter background",
-      "video_prompt": "A young Japanese woman in a white blouse receives a coffee cup at a cafe counter and takes a sip, close-up shot, warm indoor lighting"
+      "keyframe_prompt": "@char stands at a modern cafe counter receiving a coffee cup, warm indoor lighting, close-up upper body shot",
+      "motion_prompt": "She receives the coffee cup from the barista, brings it to her lips and takes a sip, close-up shot, warm indoor lighting"
     },
     {
       "scene_number": 3,
@@ -540,7 +545,8 @@ projects/{project_id}/clips/
       "camera_work": { "type": "POV", "description": "斜め後ろからのPOVショット" },
       "caption_text": "今日も頑張る",
       "image_prompt": "Modern office desk with laptop, bright office lighting",
-      "video_prompt": "A young Japanese woman in a white blouse sits at a modern office desk typing on a laptop, POV shot from behind, bright office environment"
+      "keyframe_prompt": "@char sits at a modern office desk typing on a laptop, POV shot from behind, bright office environment",
+      "motion_prompt": "She types on the laptop with focused concentration, occasionally pausing to think, POV shot from behind, bright office environment"
     }
   ],
   "bgm_direction": "明るくテンポの良いポップス、BPM 120前後"
@@ -584,22 +590,39 @@ projects/{project_id}/clips/
       "description": "オフィスデスク",
       "image_path": "projects/OLの一日_20260223_100000/assets/backgrounds/scene_03.png"
     }
+  ],
+  "keyframes": [
+    {
+      "scene_number": 1,
+      "image_path": "projects/OLの一日_20260223_100000/assets/keyframes/scene_01.png",
+      "prompt": "@char stands at a modern apartment entrance in the morning sunlight, wearing a white blouse and navy skirt, holding a tote bag, wide shot composition, bright and airy"
+    },
+    {
+      "scene_number": 2,
+      "image_path": "projects/OLの一日_20260223_100000/assets/keyframes/scene_02.png",
+      "prompt": "@char stands at a modern cafe counter receiving a coffee cup, warm indoor lighting, close-up upper body shot"
+    },
+    {
+      "scene_number": 3,
+      "image_path": "projects/OLの一日_20260223_100000/assets/keyframes/scene_03.png",
+      "prompt": "@char sits at a modern office desk typing on a laptop, POV shot from behind, bright office environment"
+    }
   ]
 }
 ```
 
-**Visual Core が使用するフィールド:** `characters[0].front_view`（リファレンス画像）と各 `scenes[].video_prompt`。`props`, `backgrounds`, `side_view`, `back_view` は Visual Core では使用しない（Asset Generator / Post-Production が使用する）。
+**Visual Core が使用するフィールド:** `keyframes[].image_path`（シーンごとのキーフレーム画像、Keyframe Engine が生成）と各 `scenes[].motion_prompt`。`characters`, `props`, `backgrounds`, `side_view`, `back_view` は Visual Core では使用しない（Asset Generator / Keyframe Engine / Post-Production が使用する）。
 
 #### 処理の流れ
 
 ```
-シーン1: front.png + video_prompt → RunwayClient.generate() → scene_01.mp4 (10秒, $0.50, 75.6秒)
-シーン2: front.png + video_prompt → RunwayClient.generate() → scene_02.mp4 (10秒, $0.50, 78.2秒)
-シーン3: front.png + video_prompt → RunwayClient.generate() → scene_03.mp4 (10秒, $0.50, 74.1秒)
+シーン1: keyframes/scene_01.png + motion_prompt → RunwayClient.generate() → scene_01.mp4 (10秒, $0.50, 75.6秒)
+シーン2: keyframes/scene_02.png + motion_prompt → RunwayClient.generate() → scene_02.mp4 (10秒, $0.50, 78.2秒)
+シーン3: keyframes/scene_03.png + motion_prompt → RunwayClient.generate() → scene_03.mp4 (10秒, $0.50, 74.1秒)
 ```
 
-- 全シーンで同一のリファレンス画像（`front.png`）を使用
-- 各シーンの `video_prompt` が動きやカメラワークを指示
+- 各シーンで Keyframe Engine が生成したキーフレーム画像（シーンごとに異なる）を使用
+- 各シーンの `motion_prompt` が動きやカメラワークを指示（外見・場所は記述しない）
 - 順次処理（シーン1完了後にシーン2を開始）
 
 #### 出力例: VideoClipSet
@@ -740,9 +763,13 @@ tests/
 
 ## 8. コスト見積もり
 
-| プロバイダ         | 単価     | 動画長 | 1クリップあたり | 10シーン |
-| ------------------ | -------- | ------ | --------------- | -------- |
-| Runway Gen-4 Turbo | $0.05/秒 | 10秒   | $0.50           | $5.00    |
+| 項目 | 単価 | 8シーン |
+| --- | --- | --- |
+| Gen-4 Image Turbo（キーフレーム） | $0.02/枚 | $0.16 |
+| Gen-4 Turbo（動画 10秒） | $0.50/本 | $4.00 |
+| **合計** | | **$4.16** |
+
+**注記:** キーフレーム画像生成は Keyframe Engine（KEYFRAME ステップ）で実行される。コスト的には Visual レイヤー全体（キーフレーム + 動画）として上記を見積もる。
 
 **参考（Veo 3、高品質代替時）:**
 
