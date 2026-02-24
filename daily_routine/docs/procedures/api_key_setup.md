@@ -4,15 +4,16 @@
 
 本プロジェクトで使用する外部APIキーの取得方法と設定方法をまとめる。
 
-| 環境変数                          | サービス           | 用途                                        |
-| --------------------------------- | ------------------ | ------------------------------------------- |
-| `DAILY_ROUTINE_API_KEY_STABILITY` | Stability AI       | 画像生成                                    |
-| `DAILY_ROUTINE_API_KEY_OPENAI`    | OpenAI             | 画像生成（DALL-E 3）/ 評価（GPT-4o Vision） |
-| `DAILY_ROUTINE_API_KEY_GOOGLE_AI` | Google AI (Gemini) | 画像生成・評価                              |
-| `DAILY_ROUTINE_API_KEY_KLING_AK`  | Kling AI           | 動画生成（T0-2 PoC）— Access Key            |
-| `DAILY_ROUTINE_API_KEY_KLING_SK`  | Kling AI           | 動画生成（T0-2 PoC）— Secret Key            |
-| `DAILY_ROUTINE_API_KEY_LUMA`      | Luma Dream Machine | 動画生成（T0-2 PoC）                        |
-| `DAILY_ROUTINE_API_KEY_RUNWAY`    | Runway             | 動画生成（T0-2 PoC）                        |
+| 環境変数                                 | サービス           | 用途                                                                     |
+| ---------------------------------------- | ------------------ | ------------------------------------------------------------------------ |
+| `DAILY_ROUTINE_API_KEY_YOUTUBE_DATA_API` | YouTube Data API   | Intelligence Engine — YouTube 検索・メタデータ取得                       |
+| `DAILY_ROUTINE_API_KEY_STABILITY`        | Stability AI       | 画像生成                                                                 |
+| `DAILY_ROUTINE_API_KEY_OPENAI`           | OpenAI             | 画像生成（DALL-E 3）/ 評価（GPT-4o Vision）/ Intelligence（Whisper字幕） |
+| `DAILY_ROUTINE_API_KEY_GOOGLE_AI`        | Google AI (Gemini) | 画像生成・評価 / Intelligence（トレンド分析LLM）                         |
+| `DAILY_ROUTINE_API_KEY_KLING_AK`         | Kling AI           | 動画生成（T0-2 PoC）— Access Key                                         |
+| `DAILY_ROUTINE_API_KEY_KLING_SK`         | Kling AI           | 動画生成（T0-2 PoC）— Secret Key                                         |
+| `DAILY_ROUTINE_API_KEY_LUMA`             | Luma Dream Machine | 動画生成（T0-2 PoC）                                                     |
+| `DAILY_ROUTINE_API_KEY_RUNWAY`           | Runway             | 動画生成（T0-2 PoC）                                                     |
 
 > **Google Veo** は GCP サービスアカウント認証を使用する（`gcloud auth login` で認証）。
 
@@ -68,7 +69,20 @@ Kling AI は **Access Key (AK)** と **Secret Key (SK)** の2つを使用した 
 
 - https://dev.runwayml.com/organization/b0dc8ac0-feb7-42e9-b86d-c043546e4362/api-keys
 
-### 2.6 Google AI (Gemini)
+### 2.6 YouTube Data API
+
+1. https://console.cloud.google.com/ にアクセスする
+2. プロジェクトを選択（または新規作成）する
+3. 左メニューの「APIとサービス」→「ライブラリ」に移動する
+4. 「YouTube Data API v3」を検索し、「有効にする」をクリックする
+5. 「APIとサービス」→「認証情報」に移動する
+6. 「認証情報を作成」→「APIキー」をクリックする
+7. 生成されたAPIキーをコピーする
+8. （推奨）APIキーの制限で「YouTube Data API v3」のみに制限する
+
+- https://console.cloud.google.com/apis/library/youtube.googleapis.com
+
+### 2.7 Google AI (Gemini)
 
 1. https://aistudio.google.com/ にアクセスする
 2. Google アカウントでサインインする
@@ -87,6 +101,7 @@ cp .env.example .env
 ```
 
 ```dotenv
+DAILY_ROUTINE_API_KEY_YOUTUBE_DATA_API=your-youtube-data-api-key
 DAILY_ROUTINE_API_KEY_STABILITY=your-stability-key
 DAILY_ROUTINE_API_KEY_OPENAI=your-openai-key
 DAILY_ROUTINE_API_KEY_GOOGLE_AI=your-google-ai-key

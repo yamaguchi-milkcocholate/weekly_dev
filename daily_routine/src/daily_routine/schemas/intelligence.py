@@ -34,7 +34,7 @@ class VisualTrend(BaseModel):
 class AudioTrend(BaseModel):
     """音響トレンド."""
 
-    bpm_range: tuple[int, int]
+    bpm_range: list[int] = Field(description="BPM範囲 [min, max]", min_length=2, max_length=2)
     genres: list[str]
     volume_patterns: list[str]
     se_usage_points: list[str] = Field(description="SE使用箇所")

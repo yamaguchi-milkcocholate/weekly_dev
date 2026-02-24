@@ -29,7 +29,7 @@
 
 ```mermaid
 flowchart TD
-    A["$ daily-routine run 'OLの一日'"] --> B[Intelligence Engine 実行]
+    A["$ daily-routine run 'OLの一日' --seeds seeds.yaml"] --> B[Intelligence Engine 実行]
     B --> CP1{チェックポイント\nAWAITING_REVIEW}
     CP1 --> R1[ユーザーが出力を目視確認]
     R1 --> D1["$ daily-routine resume &lt;project_id&gt;"]
@@ -278,11 +278,14 @@ class VisualStepAdapter(StepEngine[VisualInput, VideoClipSet]):
 ランナーの `_execute_step()` は、現在のステップに応じて過去ステップの出力を `load_output()` で取得し、入力型を組み立てる。
 
 ```python
-async def _build_input(step: PipelineStep, project_dir: Path) -> object:
+def _build_input(
+    step: PipelineStep, project_dir: Path,
+    keyword: str | None = None,
+    seed_videos: list[SeedVideo] | None = None,
+) -> object:
     """ステップに必要な入力データを過去の出力から組み立てる."""
     if step == PipelineStep.INTELLIGENCE:
-        config = load_project_config(project_dir)
-        return IntelligenceInput(keyword=config.keyword, seed_videos=...)
+        return IntelligenceInput(keyword=keyword or "", seed_videos=seed_videos or [])
     elif step == PipelineStep.SCENARIO:
         return create_engine(PipelineStep.INTELLIGENCE).load_output(project_dir)
     elif step == PipelineStep.ASSET:
@@ -420,11 +423,12 @@ def register_engine(step: PipelineStep, engine_class: type[StepEngine]) -> None:
     """
 
 
-def create_engine(step: PipelineStep) -> StepEngine:
+def create_engine(step: PipelineStep, **kwargs: object) -> StepEngine:
     """登録済みのエンジンクラスからインスタンスを生成する.
 
     Args:
         step: パイプラインステップ
+        **kwargs: エンジンコンストラクタに渡すキーワード引数（APIキー等）
 
     Returns:
         StepEngineのインスタンス
@@ -438,7 +442,7 @@ def get_registered_steps() -> list[PipelineStep]:
     """登録済みステップの一覧を取得する."""
 ```
 
-**設計判断:** デコレータベースの自動登録は採用しない。レイヤー実装の追加タイミングが明確（T1-2〜T1-6）であり、明示的な登録の方がデバッグしやすい。レジストリへの登録は `pipeline/__init__.py` で行う。
+**設計判断:** デコレータベースの自動登録は採用しない。レイヤー実装の追加タイミングが明確（T1-2〜T1-6）であり、明示的な登録の方がデバッグしやすい。レジストリへの登録は `cli/app.py` の `_register_engines()` で行う（`pipeline/__init__.py` での登録は循環importを招くため回避）。
 
 ### 4.6 ランナー (`pipeline/runner.py`) — 書換
 
@@ -470,15 +474,21 @@ STEP_ORDER: list[PipelineStep] = [
 ]
 
 
-async def run_pipeline(project_dir: Path, project_id: str, keyword: str) -> PipelineState:
+async def run_pipeline(
+    project_dir: Path,
+    project_id: str,
+    keyword: str,
+    api_keys: dict[str, str] | None = None,
+    seed_videos: list[SeedVideo] | None = None,
+) -> PipelineState:
     """パイプラインを新規実行する.
 
     最初のステップを実行し、AWAITING_REVIEWで停止する。
 
     処理フロー:
     1. initialize_stateで全ステップPENDINGの状態を生成
-    2. 最初のステップのエンジンを取得
-    3. _build_inputで入力データを組み立て
+    2. 最初のステップのエンジンを取得（api_keysを注入）
+    3. _build_inputで入力データを組み立て（seed_videosを含む）
     4. ステップを実行（_execute_step）
     5. 状態を保存して停止
 
@@ -486,13 +496,15 @@ async def run_pipeline(project_dir: Path, project_id: str, keyword: str) -> Pipe
         project_dir: プロジェクトデータディレクトリ
         project_id: プロジェクトID
         keyword: 検索キーワード（Intelligenceステップの入力）
+        api_keys: APIキーの辞書（環境変数名のサフィックス小文字 → 値）
+        seed_videos: ユーザー提供のシード動画情報リスト
 
     Returns:
         実行後のPipelineState
     """
 
 
-async def resume_pipeline(project_dir: Path) -> PipelineState:
+async def resume_pipeline(project_dir: Path, api_keys: dict[str, str] | None = None) -> PipelineState:
     """パイプラインを再開する.
 
     現在AWAITING_REVIEWのステップをAPPROVEDにし、次のステップを実行する。
@@ -515,7 +527,7 @@ async def resume_pipeline(project_dir: Path) -> PipelineState:
     """
 
 
-async def retry_pipeline(project_dir: Path) -> PipelineState:
+async def retry_pipeline(project_dir: Path, api_keys: dict[str, str] | None = None) -> PipelineState:
     """エラーステップを再試行する.
 
     処理フロー:
@@ -614,17 +626,24 @@ def _setup(
 def run(
     keyword: str = typer.Argument(help="検索キーワード"),
     project_id: str | None = typer.Option(None, help="プロジェクトID（省略時は自動生成）"),
+    seeds: Path | None = typer.Option(None, help="シード動画情報のYAMLファイルパス"),
 ) -> None:
     """パイプラインを新規実行する.
 
     プロジェクトを初期化し、最初のステップ（Intelligence）を実行する。
     ステップ完了後にチェックポイントで停止する。
+    --seeds で競合動画の情報を提供すると、より精度の高いトレンド分析が行われる。
     """
     global_config = load_global_config()
     project_config = init_project(global_config, keyword, project_id)
     project_dir = get_project_dir(global_config, project_config.project_id)
 
-    state = asyncio.run(run_pipeline(project_dir, project_config.project_id, keyword))
+    seed_videos = _load_seeds(seeds) if seeds else None
+    api_keys = global_config.api_keys.model_dump()
+    state = asyncio.run(
+        run_pipeline(project_dir, project_config.project_id, keyword,
+                     api_keys=api_keys, seed_videos=seed_videos)
+    )
 
     _print_state_summary(state)
 
@@ -711,6 +730,9 @@ def _print_state_summary(state: PipelineState) -> None:
 - `asyncio.run()` でasync関数をCLIから呼び出す。Typerは同期ベースであり、CLIレイヤーで同期→非同期のブリッジを行う。
 - `run` コマンドから `step` オプションを削除。ステップ単位の実行は `resume` / `retry` で制御する。
 - `_print_state_summary` を共通ヘルパーとして抽出。全コマンドで統一的なステータス表示を提供する。
+- `run` コマンドに `--seeds` オプションを追加。YAML ファイルでシード動画情報（URL + note + scene_captures）を受け付ける。`_load_seeds()` ヘルパーが YAML → `list[SeedVideo]` 変換を行う。省略時は拡張検索のみで動作する。
+- APIキーは `global_config.api_keys.model_dump()` → `_engine_kwargs()` でステップごとのキーワード引数に変換し `create_engine()` に渡す。
+- エンジン登録は `_setup()` callback 内の `_register_engines()` で遅延実行する（循環import回避のため `pipeline/__init__.py` ではなく CLI 側で行う）。
 
 ---
 

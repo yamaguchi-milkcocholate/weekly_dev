@@ -1,11 +1,12 @@
 """プロジェクト設定・メタデータのスキーマ."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+
 from pydantic import BaseModel, Field
 
 
-class PipelineStep(str, Enum):
+class PipelineStep(StrEnum):
     """パイプラインのステップ."""
 
     INTELLIGENCE = "intelligence"
@@ -16,7 +17,7 @@ class PipelineStep(str, Enum):
     POST_PRODUCTION = "post_production"
 
 
-class CheckpointStatus(str, Enum):
+class CheckpointStatus(StrEnum):
     """チェックポイントのステータス."""
 
     PENDING = "pending"
@@ -24,6 +25,7 @@ class CheckpointStatus(str, Enum):
     AWAITING_REVIEW = "awaiting_review"
     APPROVED = "approved"
     REJECTED = "rejected"
+    ERROR = "error"
 
 
 class StepState(BaseModel):
@@ -33,6 +35,7 @@ class StepState(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None
+    retry_count: int = Field(default=0, description="リトライ回数")
 
 
 class PipelineState(BaseModel):
@@ -41,6 +44,7 @@ class PipelineState(BaseModel):
     project_id: str
     current_step: PipelineStep | None = None
     steps: dict[PipelineStep, StepState] = Field(default_factory=dict)
+    completed: bool = Field(default=False, description="パイプライン完了フラグ")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 

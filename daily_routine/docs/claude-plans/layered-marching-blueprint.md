@@ -27,7 +27,7 @@ T1-1: CLI基盤 / パイプライン ← 全レイヤーの実行基盤
 | 3    | T1-5     | `scenario_engine_design.md`     | 4              | OpenAI GPT-5系                    |
 | 4    | T1-3     | `asset_generator_design.md`     | 4              | Gemini (画像生成)                 |
 | 5    | T1-4     | `visual_core_design.md`         | 4              | Runway Gen-4 Turbo, GCS           |
-| 6    | T1-6     | `audio_engine_design.md`        | 5              | Pixabay Audio, Suno, Gemini       |
+| 6    | T1-6     | `audio_engine_design.md`        | 4              | Suno（オプション）, Gemini        |
 
 ## 順序の根拠
 

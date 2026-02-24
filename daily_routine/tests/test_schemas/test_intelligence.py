@@ -34,7 +34,7 @@ def _make_trend_report() -> TrendReport:
             color_tones=["暖色系"],
         ),
         audio_trend=AudioTrend(
-            bpm_range=(100, 130),
+            bpm_range=[100, 130],
             genres=["Lo-Fi"],
             volume_patterns=["フェードイン"],
             se_usage_points=["シーン切り替え"],

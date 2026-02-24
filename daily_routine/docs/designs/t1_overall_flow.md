@@ -7,7 +7,7 @@
 6つのレイヤーが順次実行され、各ステップ完了後にチェックポイント（`AWAITING_REVIEW`）で停止する。ユーザーが確認・承認した後、次のステップへ進む。
 
 ```
-キーワード + シード動画情報
+キーワード + シード動画情報（--seeds seeds.yaml で提供）
     ↓
 [1. Intelligence Engine]  → TrendReport
     ↓ チェックポイント
@@ -30,7 +30,7 @@
 flowchart TD
     subgraph "入力"
         KW["キーワード<br/>例: OLの一日"]
-        SEED["シード動画情報<br/>URL + 画像 + テキスト説明"]
+        SEED["シード動画情報（--seeds YAML）<br/>URL + 画像 + テキスト説明"]
     end
 
     subgraph "1. Intelligence Engine"
@@ -50,7 +50,7 @@ flowchart TD
     end
 
     subgraph "5. Audio Engine"
-        AE["音声調達<br/>・BGM: Pixabay優先 → Sunoフォールバック<br/>・SE: LLM推定 → Pixabay取得"]
+        AE["音声調達<br/>・調達リスト出力 + 人手配置<br/>・BGM: 人手配置優先 → Sunoフォールバック<br/>・SE: LLM推定 → 人手配置"]
     end
 
     subgraph "6. Post-Production"
@@ -231,7 +231,7 @@ flowchart LR
 
 | 入力型                | 使用ステップ    | 含むデータ                           |
 | --------------------- | --------------- | ------------------------------------ |
-| `IntelligenceInput`   | Intelligence    | keyword, seed_videos                 |
+| `IntelligenceInput`   | Intelligence    | keyword, seed_videos（CLI の --seeds YAML から変換） |
 | `VisualInput`         | Visual          | Scenario + AssetSet                  |
 | `AudioInput`          | Audio           | AudioTrend + Scenario                |
 | `PostProductionInput` | Post-Production | Scenario + VideoClipSet + AudioAsset |
@@ -308,7 +308,7 @@ projects/{project_id}/
 | シナリオ生成 LLM           | OpenAI GPT-5 系                        | Scenario Engine     | （設計書で決定） |
 | トレンド分析 LLM           | Gemini 2.5 Flash                       | Intelligence Engine | （設計書で決定） |
 | SE 推定 LLM                | Gemini 2.5 Flash                       | Audio Engine        | （設計書で決定） |
-| BGM フリー素材             | Pixabay Audio API                      | Audio Engine        | （設計書で決定） |
+| BGM・SE 素材               | 人手配置（フリー素材サイトから手動DL） | Audio Engine        | （設計書で決定） |
 | BGM AI 生成                | Suno API v4                            | Audio Engine        | （ADR 作成予定） |
 | メタデータ取得             | YouTube Data API v3                    | Intelligence Engine | —                |
 | 字幕取得                   | youtube-transcript-api                 | Intelligence Engine | —                |

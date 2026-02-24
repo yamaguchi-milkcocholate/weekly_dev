@@ -6,6 +6,7 @@ api_keys:
   youtube_data_api: ""
   openai: ""
   google_ai: ""
+  suno: ""
 
 # デフォルトのプロジェクト設定
 defaults:

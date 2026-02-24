@@ -405,7 +405,9 @@ Gemini 2.5 Flash に以下を入力し、`TrendReport` を Structured Output で
 
 ### 3.7 スキーマ拡張
 
-既存の `TrendReport` スキーマ（`schemas/intelligence.py`）はそのまま使用する。変更不要。
+既存の `TrendReport` スキーマ（`schemas/intelligence.py`）は概ねそのまま使用する。
+
+**変更点:** `AudioTrend.bpm_range` の型を `tuple[int, int]` → `list[int]`（`min_length=2, max_length=2`）に変更。Gemini API の `response_schema` が Pydantic v2 の `prefixItems`（tuple の JSON Schema 表現）に対応していないため。
 
 `SeedVideo`, `SceneCapture`（ユーザー入力）は `intelligence/base.py` に定義する。内部の中間データ型は `intelligence/` パッケージ内に定義し、`schemas/` には追加しない。
 
@@ -465,6 +467,39 @@ engine のコンストラクタ引数で制御する。
 「OLの一日」をキーワードとした分析の具体例を示す。
 
 ### 4.1 入力例
+
+#### CLI からの呼び出し
+
+```bash
+# シード動画なし（拡張検索のみ）
+uv run daily-routine run "OLの一日"
+
+# シード動画付き（YAML ファイルで指定）
+uv run daily-routine run "OLの一日" --seeds seeds.yaml
+```
+
+**seeds.yaml の形式:**
+
+```yaml
+seed_videos:
+  - url: "https://www.youtube.com/shorts/abc123xyz"
+    note: "朝の準備から出社までをテンポよく見せている。テロップの入れ方が上手い"
+    scene_captures:
+      - image_path: "./captures/abc123xyz/scene_001.png"
+        description: "冒頭のアラーム画面。大きな白文字で「AM 6:00」と表示。視聴者の目を引くフック"
+        timestamp_sec: 0.5
+      - image_path: "./captures/abc123xyz/scene_002.png"
+        description: "コーヒーを淹れるシーン。暖色系フィルタでおしゃれな雰囲気。小物の配置が参考になる"
+        timestamp_sec: 8.0
+  - url: "https://www.youtube.com/shorts/def456uvw"
+    note: "退勤後の夜ルーティンに特化。BGMがチルで心地よい"
+    scene_captures:
+      - image_path: "./captures/def456uvw/scene_001.png"
+        description: "帰宅してドアを開ける瞬間。「ただいま〜」のテロップがかわいいフォント"
+        timestamp_sec: 1.0
+```
+
+CLI は YAML を `_load_seeds()` で `list[SeedVideo]` に変換し、`run_pipeline()` → `_build_input()` → `IntelligenceInput.seed_videos` に渡す。
 
 #### `IntelligenceEngine.analyze()` の呼び出し
 

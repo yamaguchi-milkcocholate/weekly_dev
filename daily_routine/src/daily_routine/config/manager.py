@@ -122,6 +122,7 @@ def init_project(global_config: GlobalConfig, keyword: str, project_id: str | No
         "assets/character",
         "assets/props",
         "assets/backgrounds",
+        "assets/reference",
         "clips",
         "audio/bgm",
         "audio/se",
