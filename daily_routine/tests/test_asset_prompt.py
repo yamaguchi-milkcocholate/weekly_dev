@@ -35,7 +35,6 @@ def scene():
         camera_work=CameraWork(type="close-up", description="顔のアップから引いていく"),
         caption_text="朝6時…今日も始まる",
         image_prompt="Modern Japanese apartment bedroom in early morning, soft sunlight, no people, photorealistic",
-        video_prompt="Camera slowly pulls back",
     )
 
 

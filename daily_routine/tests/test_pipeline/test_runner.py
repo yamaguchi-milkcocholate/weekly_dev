@@ -104,7 +104,6 @@ class TestRunPipeline:
         for step in STEP_ORDER[1:]:
             assert state.steps[step].status == CheckpointStatus.PENDING
 
-
     @pytest.mark.asyncio
     async def test_seed_videos付きで実行(self, tmp_path) -> None:
         seeds = [
@@ -285,7 +284,17 @@ class TestEngineKwargs:
         result = _engine_kwargs(PipelineStep.ASSET, api_keys)
         assert result == {"api_key": "gai-key"}
 
+    def test_keyframeステップ_runway_api_key(self) -> None:
+        api_keys = {"runway": "rw-key", "gcs_bucket": "my-bucket", "image_model": "gen4_image_turbo"}
+        result = _engine_kwargs(PipelineStep.KEYFRAME, api_keys)
+        assert result == {"api_key": "rw-key", "gcs_bucket": "my-bucket", "image_model": "gen4_image_turbo"}
+
+    def test_visualステップ_runway_api_key(self) -> None:
+        api_keys = {"runway": "rw-key", "gcs_bucket": "my-bucket", "video_model": "gen4_turbo"}
+        result = _engine_kwargs(PipelineStep.VISUAL, api_keys)
+        assert result == {"api_key": "rw-key", "gcs_bucket": "my-bucket", "video_model": "gen4_turbo"}
+
     def test_他のステップ_空dict(self) -> None:
         api_keys = {"youtube_data_api": "yt-key"}
-        result = _engine_kwargs(PipelineStep.VISUAL, api_keys)
+        result = _engine_kwargs(PipelineStep.POST_PRODUCTION, api_keys)
         assert result == {}

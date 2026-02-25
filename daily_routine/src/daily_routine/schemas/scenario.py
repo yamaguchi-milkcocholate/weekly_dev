@@ -21,10 +21,6 @@ class SceneSpec(BaseModel):
     image_prompt: str = Field(
         description="Asset Generator用の背景画像生成プロンプト（英語）。キャラクター不在、背景のみ"
     )
-    video_prompt: str = Field(
-        description="Visual Core用の動画生成プロンプト（英語）。"
-        "動作・カメラワーク・雰囲気のみ、キャラクター外見描写なし"
-    )
 
 
 class CharacterSpec(BaseModel):

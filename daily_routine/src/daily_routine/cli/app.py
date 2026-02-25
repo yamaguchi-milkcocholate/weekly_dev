@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 import yaml
 
-from daily_routine.config.manager import get_project_dir, init_project, load_global_config
+from daily_routine.config.manager import GlobalConfig, get_project_dir, init_project, load_global_config
 from daily_routine.intelligence.base import SceneCapture, SeedVideo
 from daily_routine.logging import setup_logging
 from daily_routine.pipeline.exceptions import InvalidStateError, PipelineError
@@ -28,13 +28,19 @@ def _register_engines() -> None:
     from daily_routine.asset.generator import GeminiAssetGenerator
     from daily_routine.audio.engine import AudioEngine
     from daily_routine.intelligence.engine import IntelligenceEngine
+    from daily_routine.keyframe.engine import RunwayKeyframeEngine
     from daily_routine.pipeline.registry import register_engine
     from daily_routine.scenario.engine import OpenAIScenarioEngine
     from daily_routine.schemas.project import PipelineStep
+    from daily_routine.storyboard.engine import OpenAIStoryboardEngine
+    from daily_routine.visual.engine import DefaultVisualEngine
 
     register_engine(PipelineStep.INTELLIGENCE, IntelligenceEngine)
     register_engine(PipelineStep.SCENARIO, OpenAIScenarioEngine)
+    register_engine(PipelineStep.STORYBOARD, OpenAIStoryboardEngine)
     register_engine(PipelineStep.ASSET, GeminiAssetGenerator)
+    register_engine(PipelineStep.KEYFRAME, RunwayKeyframeEngine)
+    register_engine(PipelineStep.VISUAL, DefaultVisualEngine)
     register_engine(PipelineStep.AUDIO, AudioEngine)
 
 
@@ -66,7 +72,7 @@ def run(
     seed_videos = _load_seeds(seeds) if seeds else None
 
     try:
-        api_keys = global_config.api_keys.model_dump()
+        api_keys = _build_api_keys(global_config)
         state = asyncio.run(
             run_pipeline(
                 project_dir,
@@ -94,7 +100,7 @@ def resume(
     project_dir = get_project_dir(global_config, project_id)
 
     try:
-        api_keys = global_config.api_keys.model_dump()
+        api_keys = _build_api_keys(global_config)
         state = asyncio.run(resume_pipeline(project_dir, api_keys=api_keys))
         _print_state_summary(state)
     except InvalidStateError as e:
@@ -117,7 +123,7 @@ def retry(
     project_dir = get_project_dir(global_config, project_id)
 
     try:
-        api_keys = global_config.api_keys.model_dump()
+        api_keys = _build_api_keys(global_config)
         state = asyncio.run(retry_pipeline(project_dir, api_keys=api_keys))
         _print_state_summary(state)
     except InvalidStateError as e:
@@ -154,6 +160,22 @@ def init(
     config = init_project(global_config, keyword, project_id)
     typer.echo(f"プロジェクトを初期化しました: {config.project_id}")
     typer.echo(f"データディレクトリ: {global_config.data_root / 'projects' / config.project_id}")
+
+
+def _build_api_keys(global_config: GlobalConfig) -> dict[str, str]:
+    """APIキー辞書にvisual設定値を追加する.
+
+    Args:
+        global_config: グローバル設定
+
+    Returns:
+        エンジンコンストラクタ用のキー辞書
+    """
+    api_keys = global_config.api_keys.model_dump()
+    api_keys["gcs_bucket"] = global_config.visual.runway.gcs_bucket
+    api_keys["image_model"] = global_config.visual.runway.image_model
+    api_keys["video_model"] = global_config.visual.runway.video_model
+    return api_keys
 
 
 def _load_seeds(seeds_path: Path) -> list[SeedVideo]:

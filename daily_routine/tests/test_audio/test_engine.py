@@ -41,7 +41,6 @@ def _make_scenario() -> Scenario:
                 camera_work=CameraWork(type="close-up", description="アラーム"),
                 caption_text="朝6時…今日も始まる",
                 image_prompt="morning bedroom",
-                video_prompt="waking up",
             ),
             SceneSpec(
                 scene_number=2,
@@ -50,7 +49,6 @@ def _make_scenario() -> Scenario:
                 camera_work=CameraWork(type="wide", description="玄関"),
                 caption_text="いってきます！",
                 image_prompt="entrance door",
-                video_prompt="leaving home",
             ),
         ],
         bgm_direction="朝の準備シーンに合う爽やかで軽快な曲、lo-fi系で統一",

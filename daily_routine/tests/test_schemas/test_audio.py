@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from daily_routine.schemas.audio import AudioAsset, BGM, SoundEffect
+from daily_routine.schemas.audio import BGM, AudioAsset, SoundEffect
 
 
 def _make_audio_asset() -> AudioAsset:

@@ -11,6 +11,7 @@ from daily_routine.intelligence.base import SeedVideo
 from daily_routine.schemas.audio import AudioAsset
 from daily_routine.schemas.intelligence import AudioTrend
 from daily_routine.schemas.scenario import Scenario
+from daily_routine.schemas.storyboard import Storyboard
 from daily_routine.schemas.visual import VideoClipSet
 
 
@@ -22,10 +23,25 @@ class IntelligenceInput(BaseModel):
     max_expand_videos: int = 10
 
 
+class StoryboardInput(BaseModel):
+    """Storyboard Engine のパイプライン入力."""
+
+    scenario: Scenario
+
+
+class KeyframeInput(BaseModel):
+    """Keyframe Engine のパイプライン入力（複合）."""
+
+    scenario: Scenario
+    storyboard: Storyboard
+    assets: "AssetSet"
+
+
 class VisualInput(BaseModel):
     """Visual Core のパイプライン入力（複合）."""
 
     scenario: Scenario
+    storyboard: Storyboard
     assets: "AssetSet"
 
 
@@ -47,4 +63,5 @@ class PostProductionInput(BaseModel):
 # 遅延インポートの解決
 from daily_routine.schemas.asset import AssetSet  # noqa: E402
 
+KeyframeInput.model_rebuild()
 VisualInput.model_rebuild()

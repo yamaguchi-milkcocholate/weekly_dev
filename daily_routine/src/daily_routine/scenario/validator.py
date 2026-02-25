@@ -75,10 +75,7 @@ class ScenarioValidator:
             expected = list(range(1, len(scenario.scenes) + 1))
             actual = [s.scene_number for s in scenario.scenes]
             if actual != expected:
-                errors.append(
-                    f"scene_number が {actual} ですが、"
-                    f"1始まりの連番 {expected} にしてください"
-                )
+                errors.append(f"scene_number が {actual} ですが、1始まりの連番 {expected} にしてください")
 
         # 6. characters が 1 件以上存在
         if len(scenario.characters) == 0:

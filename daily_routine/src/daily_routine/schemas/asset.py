@@ -33,9 +33,21 @@ class BackgroundAsset(BaseModel):
     image_path: Path
 
 
+class KeyframeAsset(BaseModel):
+    """キーフレーム画像アセット."""
+
+    scene_number: int = Field(description="シーン番号")
+    image_path: Path = Field(description="キーフレーム画像ファイルパス")
+    prompt: str = Field(description="生成に使用したプロンプト")
+
+
 class AssetSet(BaseModel):
     """Asset Generatorの出力."""
 
     characters: list[CharacterAsset]
     props: list[PropAsset]
     backgrounds: list[BackgroundAsset]
+    keyframes: list[KeyframeAsset] = Field(
+        default_factory=list,
+        description="各シーンのキーフレーム画像（Gen-4 Imageで生成）",
+    )

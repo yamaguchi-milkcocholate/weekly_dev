@@ -25,6 +25,7 @@ class ApiKeys(BaseModel):
     youtube_data_api: str = ""
     openai: str = ""
     google_ai: str = ""
+    runway: str = ""
 
     model_config = {"extra": "allow"}
 
@@ -43,6 +44,21 @@ class DefaultsConfig(BaseModel):
     output_duration_range: tuple[int, int] = (30, 60)
 
 
+class RunwayConfig(BaseModel):
+    """Runway Gen-4 固有設定."""
+
+    video_model: str = Field(default="gen4_turbo", description="動画生成モデル名")
+    image_model: str = Field(default="gen4_image_turbo", description="画像生成モデル名")
+    gcs_bucket: str = Field(default="", description="GCSバケット名（画像アップロード用）")
+
+
+class VisualConfig(BaseModel):
+    """Visual Core 設定."""
+
+    provider: str = Field(default="runway", description="動画生成プロバイダ: runway")
+    runway: RunwayConfig = Field(default_factory=RunwayConfig)
+
+
 class GlobalConfig(BaseModel):
     """グローバル設定."""
 
@@ -50,6 +66,7 @@ class GlobalConfig(BaseModel):
     api_keys: ApiKeys = Field(default_factory=ApiKeys)
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    visual: VisualConfig = Field(default_factory=VisualConfig)
 
 
 def _apply_env_overrides(api_keys: ApiKeys) -> ApiKeys:
@@ -122,6 +139,7 @@ def init_project(global_config: GlobalConfig, keyword: str, project_id: str | No
         "assets/character",
         "assets/props",
         "assets/backgrounds",
+        "assets/keyframes",
         "assets/reference",
         "clips",
         "audio/bgm",

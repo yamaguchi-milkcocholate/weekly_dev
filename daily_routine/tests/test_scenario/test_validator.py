@@ -21,7 +21,6 @@ def _make_scene(scene_number: int = 1, duration_sec: float = 5.0) -> SceneSpec:
         camera_work=CameraWork(type="POV", description="テストカメラワーク"),
         caption_text="テストテロップ",
         image_prompt="test image prompt",
-        video_prompt="test video prompt",
     )
 
 

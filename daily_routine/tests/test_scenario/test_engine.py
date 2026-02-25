@@ -89,7 +89,6 @@ def _make_scenario(total_duration_sec: float = 45.0) -> Scenario:
                 camera_work=CameraWork(type="close-up", description="目覚まし時計のクローズアップ"),
                 caption_text="おはよう〜☀️",
                 image_prompt="A cozy bedroom, morning light",
-                video_prompt="A hand reaching for alarm clock",
             ),
             SceneSpec(
                 scene_number=2,
@@ -98,7 +97,6 @@ def _make_scenario(total_duration_sec: float = 45.0) -> Scenario:
                 camera_work=CameraWork(type="wide", description="駅のホーム"),
                 caption_text="通勤ラッシュ🚃",
                 image_prompt="A train station platform",
-                video_prompt="Walking on a train platform",
             ),
             SceneSpec(
                 scene_number=3,
@@ -107,7 +105,6 @@ def _make_scenario(total_duration_sec: float = 45.0) -> Scenario:
                 camera_work=CameraWork(type="POV", description="デスク上のPOV"),
                 caption_text="今日も頑張る💻",
                 image_prompt="A modern office desk",
-                video_prompt="Typing on a laptop keyboard",
             ),
         ],
         bgm_direction="明るいlo-fi pop、BPM 110〜130",

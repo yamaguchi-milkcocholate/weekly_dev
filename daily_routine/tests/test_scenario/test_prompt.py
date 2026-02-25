@@ -87,7 +87,6 @@ class TestScenarioPromptBuilder:
         prompt = self.builder.build_system_prompt(self.trend_report)
         assert "reference_prompt" in prompt
         assert "image_prompt" in prompt
-        assert "video_prompt" in prompt
 
     def test_ユーザープロンプト_キーワードとduration_rangeを含む(self) -> None:
         prompt = self.builder.build_user_prompt("OLの一日", (30, 60))

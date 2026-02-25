@@ -18,7 +18,6 @@ def _make_scenes() -> list[SceneSpec]:
             camera_work=CameraWork(type="close-up", description="アラームを止める手元"),
             caption_text="朝6時…今日も始まる",
             image_prompt="morning bedroom alarm clock",
-            video_prompt="waking up in morning",
         ),
         SceneSpec(
             scene_number=2,
@@ -27,7 +26,6 @@ def _make_scenes() -> list[SceneSpec]:
             camera_work=CameraWork(type="wide", description="玄関"),
             caption_text="いってきます！",
             image_prompt="entrance door morning",
-            video_prompt="leaving home",
         ),
     ]
 

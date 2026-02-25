@@ -70,7 +70,6 @@ def scene():
         camera_work=CameraWork(type="close-up", description="顔のアップ"),
         caption_text="朝6時",
         image_prompt="Modern bedroom, morning light, no people",
-        video_prompt="Camera pulls back",
     )
 
 

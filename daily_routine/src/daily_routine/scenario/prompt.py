@@ -38,32 +38,32 @@ class ScenarioPromptBuilder:
 - 分析動画数: {trend_report.analyzed_video_count}
 - 平均シーン数: {ss.total_scenes}
 - 平均シーン尺: {ss.avg_scene_duration_sec}秒
-- 冒頭フック手法: {', '.join(ss.hook_techniques)}
-- シーン遷移パターン: {', '.join(ss.transition_patterns)}
+- 冒頭フック手法: {", ".join(ss.hook_techniques)}
+- シーン遷移パターン: {", ".join(ss.transition_patterns)}
 
 ### テロップトレンド
-- フォントスタイル: {', '.join(ct.font_styles)}
-- 配色: {', '.join(ct.color_schemes)}
-- アニメーション: {', '.join(ct.animation_types)}
-- 配置位置: {', '.join(ct.positions)}
-- 強調手法: {', '.join(ct.emphasis_techniques)}
+- フォントスタイル: {", ".join(ct.font_styles)}
+- 配色: {", ".join(ct.color_schemes)}
+- アニメーション: {", ".join(ct.animation_types)}
+- 配置位置: {", ".join(ct.positions)}
+- 強調手法: {", ".join(ct.emphasis_techniques)}
 
 ### 映像トレンド
-- シチュエーション: {', '.join(vt.situations)}
-- 登場小物: {', '.join(vt.props)}
-- カメラワーク: {', '.join(vt.camera_works)}
-- 色調: {', '.join(vt.color_tones)}
+- シチュエーション: {", ".join(vt.situations)}
+- 登場小物: {", ".join(vt.props)}
+- カメラワーク: {", ".join(vt.camera_works)}
+- 色調: {", ".join(vt.color_tones)}
 
 ### 音響トレンド
 - BPM帯: {at.bpm_range[0]}〜{at.bpm_range[1]}
-- ジャンル: {', '.join(at.genres)}
-- 音量パターン: {', '.join(at.volume_patterns)}
-- SE使用箇所: {', '.join(at.se_usage_points)}
+- ジャンル: {", ".join(at.genres)}
+- 音量パターン: {", ".join(at.volume_patterns)}
+- SE使用箇所: {", ".join(at.se_usage_points)}
 
 ### 素材要件
-- キャラクター: {', '.join(ar.characters)}
-- 小物: {', '.join(ar.props)}
-- 背景: {', '.join(ar.backgrounds)}
+- キャラクター: {", ".join(ar.characters)}
+- 小物: {", ".join(ar.props)}
+- 背景: {", ".join(ar.backgrounds)}
 
 ## シナリオ生成ルール
 
@@ -94,15 +94,12 @@ class ScenarioPromptBuilder:
 - caption_text: 視聴者の興味を引くテロップ文言（日本語）。トレンド分析の emphasis_techniques を参考
 - image_prompt: Asset Generator 向け背景画像生成プロンプト（英語）。\
 キャラクター不在、背景のみ。色調はトレンドの color_tones を反映
-- video_prompt: Visual Core 向け動画生成プロンプト（英語）。\
-キャラクターの動作・カメラワーク・背景・雰囲気のみを記述し、\
-キャラクターの外見描写は含めない（外見はリファレンス画像に委任する）
 
 ### 5. BGM方向性（bgm_direction）
 - トレンド分析の audio_trend（BPM帯、ジャンル）を反映した自然言語の指示（日本語）
 
 ### 6. プロンプト言語ルール
-- 英語で書くフィールド: image_prompt, video_prompt, reference_prompt, appearance, outfit
+- 英語で書くフィールド: image_prompt, reference_prompt, appearance, outfit
 - 日本語で書くフィールド: title, situation, caption_text, bgm_direction, PropSpec.name, PropSpec.description"""
 
     def build_user_prompt(

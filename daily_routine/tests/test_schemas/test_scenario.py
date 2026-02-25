@@ -30,7 +30,6 @@ def _make_scenario() -> Scenario:
                 camera_work=CameraWork(type="POV", description="主観視点で駅を歩く"),
                 caption_text="朝7時に出発！",
                 image_prompt="Japanese train station morning",
-                video_prompt="Walking in crowded station, POV",
             ),
         ],
         bgm_direction="朝の爽やかなLo-Fi",

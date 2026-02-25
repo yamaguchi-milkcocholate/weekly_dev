@@ -11,7 +11,9 @@ class PipelineStep(StrEnum):
 
     INTELLIGENCE = "intelligence"
     SCENARIO = "scenario"
+    STORYBOARD = "storyboard"
     ASSET = "asset"
+    KEYFRAME = "keyframe"
     VISUAL = "visual"
     AUDIO = "audio"
     POST_PRODUCTION = "post_production"

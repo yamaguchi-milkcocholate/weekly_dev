@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 STEP_ORDER: list[PipelineStep] = [
     PipelineStep.INTELLIGENCE,
     PipelineStep.SCENARIO,
+    PipelineStep.STORYBOARD,
     PipelineStep.ASSET,
+    PipelineStep.KEYFRAME,
     PipelineStep.VISUAL,
     PipelineStep.AUDIO,
     PipelineStep.POST_PRODUCTION,
@@ -224,7 +226,9 @@ def _build_input(
     """
     from daily_routine.schemas.pipeline_io import (
         AudioInput,
+        KeyframeInput,
         PostProductionInput,
+        StoryboardInput,
         VisualInput,
     )
 
@@ -232,12 +236,21 @@ def _build_input(
         return IntelligenceInput(keyword=keyword or "", seed_videos=seed_videos or [])
     elif step == PipelineStep.SCENARIO:
         return create_engine(PipelineStep.INTELLIGENCE).load_output(project_dir)
+    elif step == PipelineStep.STORYBOARD:
+        scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
+        return StoryboardInput(scenario=scenario)
     elif step == PipelineStep.ASSET:
         return create_engine(PipelineStep.SCENARIO).load_output(project_dir)
+    elif step == PipelineStep.KEYFRAME:
+        scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
+        storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
+        assets = create_engine(PipelineStep.ASSET).load_output(project_dir)
+        return KeyframeInput(scenario=scenario, storyboard=storyboard, assets=assets)
     elif step == PipelineStep.VISUAL:
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
-        assets = create_engine(PipelineStep.ASSET).load_output(project_dir)
-        return VisualInput(scenario=scenario, assets=assets)
+        storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
+        assets = create_engine(PipelineStep.KEYFRAME).load_output(project_dir)
+        return VisualInput(scenario=scenario, storyboard=storyboard, assets=assets)
     elif step == PipelineStep.AUDIO:
         trend_report = create_engine(PipelineStep.INTELLIGENCE).load_output(project_dir)
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
@@ -299,9 +312,28 @@ def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[
             "api_key": api_keys.get("openai", ""),
         }
 
+    if step == PipelineStep.STORYBOARD:
+        return {
+            "api_key": api_keys.get("openai", ""),
+        }
+
     if step == PipelineStep.ASSET:
         return {
             "api_key": api_keys.get("google_ai", ""),
+        }
+
+    if step == PipelineStep.KEYFRAME:
+        return {
+            "api_key": api_keys.get("runway", ""),
+            "gcs_bucket": api_keys.get("gcs_bucket", ""),
+            "image_model": api_keys.get("image_model", "gen4_image_turbo"),
+        }
+
+    if step == PipelineStep.VISUAL:
+        return {
+            "api_key": api_keys.get("runway", ""),
+            "gcs_bucket": api_keys.get("gcs_bucket", ""),
+            "video_model": api_keys.get("video_model", "gen4_turbo"),
         }
 
     if step == PipelineStep.AUDIO:
@@ -310,5 +342,4 @@ def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[
             "google_ai_api_key": api_keys.get("google_ai", ""),
         }
 
-    # 他のステップは今後の実装時に追加
     return {}
