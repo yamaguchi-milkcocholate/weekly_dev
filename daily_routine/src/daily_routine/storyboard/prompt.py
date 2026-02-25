@@ -48,11 +48,107 @@ Dolly in/out, Track left/right, Crane up/down, Orbit, Handheld (subtle shake)
 ## プロンプト品質ルール
 
 ### keyframe_prompt（キーフレーム画像生成プロンプト）
+
+#### 基本ルール
 - 英語で記述する
-- 自然言語の完全な文章で記述する
-- @char タグでキャラクターを参照する（例: "@char sits at a cafe table"）
-- 場所・環境、照明・雰囲気、構図・カメラアングルを含める
+- 自然言語の完全な文章で記述する（キーワードリストは不可）
+- 「見えている状態」を描写する（命令や依頼ではなく、映像として見える光景を書く）
+- @char タグでキャラクターを参照する（外見・服装の再記述は不要。分裂の原因になる）
+- @location タグで背景参照画像を参照できる（利用可能な場合）
 - 1プロンプトにつき1シーンのみ記述する
+- 否定表現を使わない（"no X" は逆の結果を招く）
+- 15〜50 words の範囲で記述する
+
+#### 4層構造を意識する
+1. Subject（主体）: @char + アクション
+2. Context/Setting（場所・文脈）: @location または環境のテキスト描写
+3. Style/Aesthetic（スタイル・雰囲気）: ライティング、色調
+4. Technical Details（技術的詳細）: 構図、レンズ、被写界深度
+
+#### ライティング語彙（具体的な用語を使う）
+- first morning light（暖かい朝の光。"golden hour" より自然）
+- chiaroscuro lighting（強い明暗コントラスト。"dramatic lighting" より効果的）
+- Rembrandt lighting（片側からの指向性ライト）
+- soft diffused light（拡散した柔らかい光）
+- backlit / rim light（逆光・輪郭光）
+- volumetric lighting / god rays（体積光）
+
+#### カメラ・レンズ語彙
+- 50mm lens perspective（標準レンズの自然な画角）
+- 35mm film（フィルムの質感）
+- shallow depth of field（浅い被写界深度・ボケ味）
+- film grain（フィルムグレイン・実写感）
+- anamorphic lens（アナモルフィックレンズのボケ）
+
+#### 構図語彙
+- rule of thirds, leading lines, frame within frame
+- generous negative space, symmetrical composition
+
+#### 色の具体性（汎用的な色名を避ける）
+- NG: "blue sky, warm colors"
+- OK: "cerulean sky, warm amber and deep orange tones"
+
+#### 良い例（公式リファレンスより）
+
+```
+Elderly watchmaker examining tiny gears through magnifying glass,
+warm workshop lighting, dozens of clocks ticking in background,
+shallow depth of field, Rembrandt lighting.
+```
+
+```
+Child astronaut in homemade cardboard helmet, standing in backyard at dusk,
+holding toy rocket, dreams reflected in helmet visor, cinematic lighting.
+```
+
+```
+Firefighter removing helmet after call, soot-streaked face,
+exhausted but determined expression, sunrise behind smoke, photojournalistic style.
+```
+
+```
+Cozy cabin during blizzard with fireplace glow and cat silhouette at window,
+warm amber interior contrasting with blue-white storm outside, intimate atmosphere.
+```
+
+#### 本プロジェクト向けの良い例
+
+```
+@char slowly stretches in @location, tangled in white sheets,
+first morning light streaming through sheer curtains casting long golden shadows.
+Soft intimate close-up from slightly above, shallow depth of field.
+```
+
+```
+@char sits in @location, both hands wrapped around a warm latte,
+steam curling upward, soft bokeh of the cafe interior in the background.
+Medium shot, eye level, 50mm lens perspective, warm natural light.
+```
+
+```
+@char types intently on a laptop in @location,
+ambient glow from the monitor illuminating her focused expression.
+Cool natural light filtering through blinds, medium shot, film grain.
+```
+
+```
+@char strides purposefully down the sidewalk in @location,
+carrying a leather bag, afternoon sunlight casting long diagonal shadows.
+Full body shot, slight low angle, cinematic depth of field.
+```
+
+#### 避けるべきパターン
+
+```
+# NG: スロット埋めテンプレート（機械的で単調な構図になる）
+@char sitting at a cafe table, holding a coffee cup. Soft natural daylight, a modern cafe. Medium shot.
+
+# NG: キャラクターの外見を再記述（参照画像と競合し分裂の原因）
+@char A young Japanese woman in a business suit, sitting at a desk.
+
+# NG: 否定表現
+@char sitting alone with no other people in the room.
+```
 
 ### motion_prompt（動画生成プロンプト）
 - 英語で記述する
@@ -62,23 +158,30 @@ Dolly in/out, Track left/right, Crane up/down, Orbit, Handheld (subtle shake)
 - 否定表現を使わない（"no camera movement" ではなく "The camera remains still"）
 - 1ショットにつき1つの連続した動きのみ記述する
 
-## 生成ルール
+## 生成ルール（厳守）
 
 1. 各シーンを1〜5カットに分解する
-2. カットの合計尺がシーンの duration_sec と一致すること
-3. 全カットの合計尺が total_duration_sec と一致すること
-4. 1カットの尺は 2〜5秒（整数）
+2. カットの合計尺がシーンの duration_sec と**正確に一致**すること
+3. 全カットの合計尺が total_duration_sec と**正確に一致**すること
+4. **1カットの尺は必ず 2〜5秒の整数値（2, 3, 4, 5 のいずれか）。1秒や6秒以上は絶対に不可**
 5. 1カットのアクションは1つまで。複雑な動作は複数カットに分割する
-6. keyframe_prompt には @char タグを使用してキャラクターを参照する
+6. keyframe_prompt には必ず @char タグを使用してキャラクターを参照する（例外なし）
 7. motion_prompt は英語、action_description は日本語
-8. motion_prompt に被写体の外見・服装・場所の説明を含めない（キーフレーム画像に反映済み）
-9. 冒頭シーンのカットは短め（2秒）にしてテンポを出す
-10. トランジションの使い分け:
-    - 同一シーン内のカット間: cut（ハードカット）を基本とする
-    - シーン間の切り替え: cross_fade または fade_out → fade_in
-    - 冒頭: 最初のカットに fade_in を設定可能
-    - エンディング: 最後のカットに fade_out を設定可能
-11. cut_id は scene_{NN}_cut_{NN} 形式（例: scene_01_cut_01, scene_02_cut_03）"""
+8. **action_description ではキャラクター名（日本語名）を使う。@char タグは使わない**（例: 「彩花がコーヒーを飲む」）
+9. motion_prompt に被写体の外見・服装・場所の説明を含めない（キーフレーム画像に反映済み）
+10. 冒頭シーンのカットは短め（2秒）にしてテンポを出す
+11. **トランジションの使い分け（必ず守ること）:**
+    - 同一シーン内のカット間: cut（ハードカット）
+    - **シーンが変わる最初のカット: cross_fade を設定する**（シーン1の最初のカットは除く）
+    - 冒頭: シーン1の最初のカットに fade_in を設定
+    - エンディング: 最終カットに fade_out を設定
+12. cut_id は scene_{NN}_cut_{NN} 形式（例: scene_01_cut_01, scene_02_cut_03）
+
+### 尺の計算の注意
+
+- シーンが5秒なら、2秒+3秒 や 3秒+2秒 や 5秒 などで合わせる
+- 「高速ダイジェスト」のシーンでも、各カットは最低2秒。テンポはカット数（2〜3カット）と動きの速さで表現する
+- 計算が合わない場合は、カット数やカットの尺を調整して必ず合計を一致させる"""
 
     def build_user_prompt(self, scenario: Scenario) -> str:
         """シナリオ情報を含むユーザープロンプトを構築する.

@@ -32,6 +32,8 @@ class StoryboardValidator:
         7. motion_prompt が英語であること（簡易チェック）
         8. keyframe_prompt に @char タグが含まれること
         9. transition が有効な値であること（Pydantic で保証）
+        10. action_description に @char タグが含まれないこと
+        11. シーン間の最初のカットに cross_fade が設定されていること
 
         Args:
             storyboard: 検証対象の Storyboard
@@ -91,6 +93,25 @@ class StoryboardValidator:
         for cut in all_cuts:
             if "@char" not in cut.keyframe_prompt:
                 errors.append(f"{cut.cut_id} の keyframe_prompt に @char タグが含まれていません")
+
+        # 10. action_description に @char タグが含まれないこと
+        for cut in all_cuts:
+            if "@char" in cut.action_description:
+                errors.append(
+                    f"{cut.cut_id} の action_description に @char タグが含まれています。"
+                    "キャラクター名（日本語名）を使用してください"
+                )
+
+        # 11. シーン間の最初のカットに cross_fade が設定されていること
+        for scene in storyboard.scenes:
+            if scene.scene_number == 1:
+                continue
+            first_cut = scene.cuts[0] if scene.cuts else None
+            if first_cut and first_cut.transition != "cross_fade":
+                errors.append(
+                    f"{first_cut.cut_id} はシーン {scene.scene_number} の最初のカットです。"
+                    f"トランジションを cross_fade にしてください（現在: {first_cut.transition}）"
+                )
 
         if errors:
             raise StoryboardValidationError(errors)

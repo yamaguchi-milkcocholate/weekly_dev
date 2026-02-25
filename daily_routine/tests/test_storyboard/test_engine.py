@@ -1,7 +1,7 @@
 """OpenAIStoryboardEngine のモックテスト."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -104,6 +104,20 @@ def _make_storyboard() -> Storyboard:
                 scene_duration_sec=15.0,
                 cuts=[
                     CutSpec(
+                        cut_id="scene_02_cut_01",
+                        scene_number=2,
+                        cut_number=1,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.DYNAMIC,
+                        camera_work="Pan right",
+                        action_description="通勤する",
+                        motion_prompt="@char walks along the platform, the camera pans right",
+                        keyframe_prompt="@char standing on a train platform, wide shot",
+                        transition=Transition.CROSS_FADE,
+                    ),
+                ]
+                + [
+                    CutSpec(
                         cut_id=f"scene_02_cut_{i:02d}",
                         scene_number=2,
                         cut_number=i,
@@ -115,13 +129,27 @@ def _make_storyboard() -> Storyboard:
                         keyframe_prompt="@char standing on a train platform, wide shot",
                         transition=Transition.CUT,
                     )
-                    for i in range(1, 6)
+                    for i in range(2, 6)
                 ],
             ),
             SceneStoryboard(
                 scene_number=3,
                 scene_duration_sec=15.0,
                 cuts=[
+                    CutSpec(
+                        cut_id="scene_03_cut_01",
+                        scene_number=3,
+                        cut_number=1,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.MODERATE,
+                        camera_work="Static",
+                        action_description="デスクで仕事",
+                        motion_prompt="@char types on keyboard, the camera remains still",
+                        keyframe_prompt="@char at a modern office desk, POV shot",
+                        transition=Transition.CROSS_FADE,
+                    ),
+                ]
+                + [
                     CutSpec(
                         cut_id=f"scene_03_cut_{i:02d}",
                         scene_number=3,
@@ -134,7 +162,7 @@ def _make_storyboard() -> Storyboard:
                         keyframe_prompt="@char at a modern office desk, POV shot",
                         transition=Transition.CUT,
                     )
-                    for i in range(1, 6)
+                    for i in range(2, 6)
                 ],
             ),
         ],
@@ -161,7 +189,7 @@ class TestOpenAIStoryboardEngine:
         engine = OpenAIStoryboardEngine(api_key="test-key")
         storyboard = _make_storyboard()
 
-        with patch.object(engine, "_call_openai", new_callable=AsyncMock) as mock_call:
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = storyboard
 
             result = await engine.generate(
@@ -207,7 +235,7 @@ class TestOpenAIStoryboardEngine:
         )
         good_storyboard = _make_storyboard()
 
-        with patch.object(engine, "_call_openai", new_callable=AsyncMock) as mock_call:
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.side_effect = [bad_storyboard, good_storyboard]
 
             result = await engine.generate(
@@ -249,7 +277,7 @@ class TestOpenAIStoryboardEngine:
             ],
         )
 
-        with patch.object(engine, "_call_openai", new_callable=AsyncMock) as mock_call:
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = bad_storyboard
 
             with pytest.raises(RuntimeError, match="2 回失敗"):
@@ -261,23 +289,13 @@ class TestOpenAIStoryboardEngine:
         assert mock_call.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_refusal_RuntimeError(self) -> None:
+    async def test_LLMが不正な型を返す_RuntimeError(self) -> None:
         engine = OpenAIStoryboardEngine(api_key="test-key", max_retries=0)
 
-        mock_message = MagicMock()
-        mock_message.parsed = None
-        mock_message.refusal = "リクエストを処理できません"
-        mock_choice = MagicMock()
-        mock_choice.message = mock_message
-        mock_response = MagicMock()
-        mock_response.choices = [mock_choice]
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
+            mock_call.side_effect = RuntimeError("LLM が Storyboard を返しませんでした")
 
-        with patch("daily_routine.storyboard.engine.AsyncOpenAI") as mock_cls:
-            mock_client = AsyncMock()
-            mock_cls.return_value = mock_client
-            mock_client.beta.chat.completions.parse = AsyncMock(return_value=mock_response)
-
-            with pytest.raises(RuntimeError, match="拒否"):
+            with pytest.raises(RuntimeError, match="Storyboard を返しませんでした"):
                 await engine.generate(
                     scenario=_make_scenario(),
                     output_dir=Path("/tmp/test"),

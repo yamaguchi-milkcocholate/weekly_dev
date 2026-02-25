@@ -3,7 +3,8 @@
 import logging
 from pathlib import Path
 
-from openai import AsyncOpenAI
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 from daily_routine.pipeline.base import StepEngine
 from daily_routine.schemas.pipeline_io import StoryboardInput
@@ -16,11 +17,13 @@ from daily_routine.storyboard.validator import StoryboardValidationError, Storyb
 logger = logging.getLogger(__name__)
 
 _STORYBOARD_FILENAME = "storyboard.json"
+_DEFAULT_MODEL = "gpt-5"
 
 
 class OpenAIStoryboardEngine(StepEngine[StoryboardInput, Storyboard], StoryboardEngineBase):
     """OpenAI GPT-5 系を使った Storyboard Engine 実装.
 
+    LangChain ChatOpenAI + with_structured_output で Storyboard を生成する。
     StepEngine[StoryboardInput, Storyboard] を実装しパイプラインに統合しつつ、
     StoryboardEngineBase の generate() も実装する。
     """
@@ -28,7 +31,7 @@ class OpenAIStoryboardEngine(StepEngine[StoryboardInput, Storyboard], Storyboard
     def __init__(
         self,
         api_key: str = "",
-        model_name: str = "gpt-4.1",
+        model_name: str = _DEFAULT_MODEL,
         max_retries: int = 3,
     ) -> None:
         self._api_key = api_key
@@ -52,7 +55,7 @@ class OpenAIStoryboardEngine(StepEngine[StoryboardInput, Storyboard], Storyboard
         """シナリオからカット分解された絵コンテを生成する.
 
         1. プロンプト構築（Phase A）
-        2. OpenAI API に Structured Output で生成リクエスト（Phase B）
+        2. LangChain ChatOpenAI + Structured Output で生成（Phase B）
         3. バリデーション（Phase C）
         4. バリデーション失敗時は最大 max_retries 回リトライ
         """
@@ -60,15 +63,19 @@ class OpenAIStoryboardEngine(StepEngine[StoryboardInput, Storyboard], Storyboard
             msg = "OpenAI API キーが設定されていません"
             raise ValueError(msg)
 
-        client = AsyncOpenAI(api_key=self._api_key)
+        llm = ChatOpenAI(
+            model=self._model_name,
+            api_key=self._api_key,
+        )
+        structured_llm = llm.with_structured_output(Storyboard)
 
         # Phase A: プロンプト構築
         system_prompt = self._prompt_builder.build_system_prompt()
         user_prompt = self._prompt_builder.build_user_prompt(scenario)
 
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+        messages: list[BaseMessage] = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
         ]
 
         last_error: Exception | None = None
@@ -78,7 +85,7 @@ class OpenAIStoryboardEngine(StepEngine[StoryboardInput, Storyboard], Storyboard
 
             try:
                 # Phase B: LLM 生成
-                storyboard = await self._call_openai(client, messages)
+                storyboard = await self._call_llm(structured_llm, messages)
 
                 # Phase C: バリデーション
                 self._validator.validate(storyboard)
@@ -100,32 +107,26 @@ class OpenAIStoryboardEngine(StepEngine[StoryboardInput, Storyboard], Storyboard
                 if attempt <= self._max_retries:
                     # リトライ: エラーフィードバックをプロンプトに追加
                     retry_prompt = self._prompt_builder.build_retry_prompt(e.errors)
-                    messages.append({"role": "assistant", "content": "（前回の生成結果）"})
-                    messages.append({"role": "user", "content": retry_prompt})
+                    messages.append(AIMessage(content="（前回の生成結果）"))
+                    messages.append(HumanMessage(content=retry_prompt))
 
         # 最大リトライ超過
         msg = f"Storyboard 生成が {self._max_retries + 1} 回失敗しました"
         raise RuntimeError(msg) from last_error
 
-    async def _call_openai(
+    async def _call_llm(
         self,
-        client: AsyncOpenAI,
-        messages: list[dict[str, str]],
+        structured_llm: object,
+        messages: list[BaseMessage],
     ) -> Storyboard:
-        """OpenAI API を呼び出し、Structured Output で Storyboard を取得する."""
-        response = await client.beta.chat.completions.parse(
-            model=self._model_name,
-            messages=messages,
-            response_format=Storyboard,
-        )
+        """LangChain Structured Output で Storyboard を取得する."""
+        result = await structured_llm.ainvoke(messages)
 
-        parsed = response.choices[0].message.parsed
-        if parsed is None:
-            refusal = response.choices[0].message.refusal
-            msg = f"OpenAI がリクエストを拒否しました: {refusal}"
+        if not isinstance(result, Storyboard):
+            msg = "LLM が Storyboard を返しませんでした"
             raise RuntimeError(msg)
 
-        return parsed
+        return result
 
     def load_output(self, project_dir: Path) -> Storyboard:
         """永続化済みの Storyboard を読み込む."""

@@ -17,6 +17,7 @@ argument-hint: <設計書ファイル名.md> [ステップN]
 3. **仕様書**: `/docs/specs/` 内のファイル — プロジェクト全体のビジョンと設計書の位置づけを確認する
 4. **既存ADR**: `/docs/adrs/` 内のファイル — 採用済み技術の制約を確認する（存在する場合）
 5. **既存の設計書**: `/docs/designs/` 内の他の設計書 — 依存関係や共通スキーマを確認する
+6. **画像・動画プロンプトガイドライン**: [/docs/guidelines/visual_prompt.md](/docs/guidelines/visual_prompt.md) — 画像/動画生成プロンプトを書く際に必ず参照する
 
 ## 入力
 

@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.dev.runwayml.com/v1"
 _COST_PER_IMAGE = 0.02  # Gen-4 Image Turbo = 2 credits = $0.02
-_POLL_INTERVAL_SEC = 3
-_POLL_MAX_ATTEMPTS = 40  # 3秒 x 40 = 最大2分
+_POLL_INTERVAL_SEC = 5
+_POLL_MAX_ATTEMPTS = 60  # 5秒 x 60 = 最大5分
 
 
 class ImageGenerationRequest(BaseModel):

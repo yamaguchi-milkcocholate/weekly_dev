@@ -6,7 +6,16 @@ api_keys:
   youtube_data_api: ""
   openai: ""
   google_ai: ""
+  runway: ""
   suno: ""
+
+# Visual Core 設定
+visual:
+  provider: "runway"
+  runway:
+    video_model: "gen4_turbo"
+    image_model: "gen4_image_turbo"
+    gcs_bucket: "daily-routine-weekly-dev"
 
 # デフォルトのプロジェクト設定
 defaults:

@@ -19,6 +19,8 @@ def _make_cut(
     keyframe_prompt: str = "@char sits at a cafe table, morning light",
     motion_prompt: str = "@char slowly sips coffee, the camera zooms in",
     cut_id: str | None = None,
+    transition: Transition = Transition.CUT,
+    action_description: str = "コーヒーを飲む",
 ) -> CutSpec:
     """テスト用のCutSpecを作成する."""
     if cut_id is None:
@@ -30,10 +32,10 @@ def _make_cut(
         duration_sec=duration_sec,
         motion_intensity=MotionIntensity.SUBTLE,
         camera_work="Slow zoom-in",
-        action_description="コーヒーを飲む",
+        action_description=action_description,
         motion_prompt=motion_prompt,
         keyframe_prompt=keyframe_prompt,
-        transition=Transition.CUT,
+        transition=transition,
     )
 
 
@@ -58,7 +60,7 @@ def _make_storyboard(
                 scene_number=2,
                 scene_duration_sec=9.0,
                 cuts=[
-                    _make_cut(2, 1, 3.0),
+                    _make_cut(2, 1, 3.0, transition=Transition.CROSS_FADE),
                     _make_cut(2, 2, 3.0),
                     _make_cut(2, 3, 3.0),
                 ],
@@ -67,7 +69,7 @@ def _make_storyboard(
                 scene_number=3,
                 scene_duration_sec=12.0,
                 cuts=[
-                    _make_cut(3, 1, 3.0),
+                    _make_cut(3, 1, 3.0, transition=Transition.CROSS_FADE),
                     _make_cut(3, 2, 3.0),
                     _make_cut(3, 3, 3.0),
                     _make_cut(3, 4, 3.0),
@@ -235,6 +237,44 @@ class TestStoryboardValidator:
         with pytest.raises(StoryboardValidationError) as exc_info:
             self.validator.validate(storyboard)
         assert any("@char" in e for e in exc_info.value.errors)
+
+    def test_action_descriptionにcharタグ_エラー(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=30.0,
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
+                + [_make_cut(1, 10, 3.0, action_description="@char がコーヒーを飲む")],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        with pytest.raises(StoryboardValidationError) as exc_info:
+            self.validator.validate(storyboard)
+        assert any("action_description" in e and "@char" in e for e in exc_info.value.errors)
+
+    def test_シーン間トランジションがcutのまま_エラー(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=15.0,
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 6)],
+            ),
+            SceneStoryboard(
+                scene_number=2,
+                scene_duration_sec=15.0,
+                cuts=[_make_cut(2, i, 3.0) for i in range(1, 6)],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        with pytest.raises(StoryboardValidationError) as exc_info:
+            self.validator.validate(storyboard)
+        assert any("cross_fade" in e for e in exc_info.value.errors)
+
+    def test_シーン1の最初のカットはcross_fade不要(self) -> None:
+        storyboard = _make_storyboard()
+        # シーン1の最初のカットが cut でもエラーにならないことを確認
+        assert storyboard.scenes[0].cuts[0].transition == Transition.CUT
+        self.validator.validate(storyboard)  # エラーなし
 
     def test_複数エラー_全て報告(self) -> None:
         scenes = [
