@@ -14,6 +14,7 @@
 | `DAILY_ROUTINE_API_KEY_KLING_SK`         | Kling AI           | 動画生成（T0-2 PoC）— Secret Key                                         |
 | `DAILY_ROUTINE_API_KEY_LUMA`             | Luma Dream Machine | 動画生成（T0-2 PoC）                                                     |
 | `DAILY_ROUTINE_API_KEY_RUNWAY`           | Runway             | 動画生成（T0-2 PoC）                                                     |
+| `DAILY_ROUTINE_API_KEY_BFL`              | BFL (Flux Kontext) | キーフレーム画像生成（Flux Kontext Pro/Max）                             |
 
 > **Google Veo** は GCP サービスアカウント認証を使用する（`gcloud auth login` で認証）。
 
@@ -92,6 +93,50 @@ Kling AI は **Access Key (AK)** と **Secret Key (SK)** の2つを使用した 
 
 - https://aistudio.google.com/api-keys?project=gen-lang-client-0563635194
 
+### 2.8 BFL (Flux Kontext)
+
+FLUX.1 Kontext は Black Forest Labs (BFL) が提供する画像生成モデル。参照画像を用いたスタイル制御に優れる。
+
+**利用可能なモデル:**
+
+| モデル      | 用途                         | 料金     |
+| ----------- | ---------------------------- | -------- |
+| Kontext Pro | 速度と品質のバランス（推奨） | $0.04/枚 |
+| Kontext Max | 最高品質                     | $0.08/枚 |
+
+**APIエンドポイント:**
+
+| エンドポイント          | 説明                                         |
+| ----------------------- | -------------------------------------------- |
+| `https://api.bfl.ai`    | グローバル（推奨、自動フェイルオーバー付き） |
+| `https://api.us.bfl.ai` | US リージョン                                |
+| `https://api.eu.bfl.ai` | EU リージョン                                |
+
+APIルート: `/v1/flux-kontext-pro`, `/v1/flux-kontext-max`
+
+**認証方式:** リクエストヘッダーに `x-key` でAPIキーを渡す。
+
+```
+x-key: ${BFL_API_KEY}
+Content-Type: application/json
+accept: application/json
+```
+
+**手順:**
+
+1. https://dashboard.bfl.ai にアクセスする
+2. アカウントを作成し、確認メールのリンクからメール認証を完了する
+3. ログイン後、サイドバーの「API」→「Credits」に移動する
+4. 「Add Credits」をクリックし、Stripe で支払いを完了する（1 credit = $0.01 USD、即時反映）
+5. サイドバーの「API」→「Keys」に移動する
+6. 「Add Key」をクリックし、用途がわかる名前を付ける
+7. 表示されたAPIキーをコピーする（画面を閉じると二度と表示されないため、必ずこの時点でコピーする）
+
+- https://dashboard.bfl.ai
+- https://docs.bfl.ml （APIドキュメント）
+
+> **並列実行制限:** 同時にアクティブにできるタスクは最大24件（Kontext Max は最大6件）。生成結果の署名付きURLは10分間のみ有効。
+
 ## 3. 環境変数の設定
 
 プロジェクトルートの `.env.example` をコピーして `.env` ファイルを作成し、取得したAPIキーを記入する。
@@ -109,6 +154,7 @@ DAILY_ROUTINE_API_KEY_KLING_AK=your-kling-access-key
 DAILY_ROUTINE_API_KEY_KLING_SK=your-kling-secret-key
 DAILY_ROUTINE_API_KEY_LUMA=your-luma-key
 DAILY_ROUTINE_API_KEY_RUNWAY=your-runway-key
+DAILY_ROUTINE_API_KEY_BFL=your-bfl-key
 ```
 
 `.env` ファイルは `.gitignore` に登録されているため、リポジトリにコミットされない。
