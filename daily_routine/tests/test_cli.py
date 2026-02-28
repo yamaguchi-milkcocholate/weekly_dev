@@ -58,16 +58,14 @@ class TestLoadSeeds:
         seeds_yaml.write_text(
             """\
 seed_videos:
-  - url: "https://www.youtube.com/watch?v=abc123"
-    note: "テンポが良い"
+  - note: "テンポが良い"
     scene_captures:
       - image_path: "./captures/scene1.png"
         description: "冒頭のフック"
         timestamp_sec: 2.0
       - image_path: "./captures/scene2.png"
         description: "オフィスシーン"
-  - url: "https://www.youtube.com/watch?v=def456"
-    note: "BGMが参考になる"
+  - note: "BGMが参考になる"
 """,
             encoding="utf-8",
         )
@@ -75,14 +73,13 @@ seed_videos:
         result = _load_seeds(seeds_yaml)
 
         assert len(result) == 2
-        assert result[0].url == "https://www.youtube.com/watch?v=abc123"
         assert result[0].note == "テンポが良い"
         assert len(result[0].scene_captures) == 2
         assert result[0].scene_captures[0].image_path == Path("./captures/scene1.png")
         assert result[0].scene_captures[0].description == "冒頭のフック"
         assert result[0].scene_captures[0].timestamp_sec == 2.0
         assert result[0].scene_captures[1].timestamp_sec is None
-        assert result[1].url == "https://www.youtube.com/watch?v=def456"
+        assert result[1].note == "BGMが参考になる"
         assert result[1].scene_captures == []
 
     def test_ファイル未存在_Exit(self, tmp_path: Path) -> None:

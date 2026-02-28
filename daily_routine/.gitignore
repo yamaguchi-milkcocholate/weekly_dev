@@ -7,3 +7,6 @@ poc/keyframe_gen/reports/
 
 # 環境変数（APIキー等の秘密情報）
 .env
+
+# シード
+seeds/

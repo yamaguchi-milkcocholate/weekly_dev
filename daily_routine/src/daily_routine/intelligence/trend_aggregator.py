@@ -7,50 +7,36 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from daily_routine.intelligence.base import SceneCapture
-from daily_routine.intelligence.transcript import TranscriptResult
-from daily_routine.intelligence.youtube import VideoMetadata
 from daily_routine.schemas.intelligence import TrendReport
 
 logger = logging.getLogger(__name__)
 
 
 class SeedVideoData(BaseModel):
-    """シード動画の統合データ（ユーザー提供 + 自動取得）."""
+    """シード動画の統合データ（ユーザー提供）."""
 
-    video_id: str
-    metadata: VideoMetadata
-    transcript: TranscriptResult | None = None
     scene_captures: list[SceneCapture] = Field(default_factory=list)
     user_note: str = Field(default="")
 
 
-class ExpandedVideoData(BaseModel):
-    """拡張検索動画のデータ（自動取得のみ）."""
-
-    video_id: str
-    metadata: VideoMetadata
-    transcript: TranscriptResult | None = None
-
-
 _SYSTEM_PROMPT = """\
-あなたはYouTubeショート動画のトレンドアナリストです。
+あなたはショート動画のトレンドアナリストです。
 競合動画の分析データを受け取り、構造化されたトレンドレポートを生成します。
 
 ## 分析の指針
 
 1. シード動画のユーザー提供画像を解析し、テキスト説明と照合してシーン構成・映像特徴を把握する
-2. 字幕テキストからテロップの内容傾向、ナレーション有無、BGM言及等を分析する
-3. 拡張検索動画の字幕・メタデータからトレンドを補強する
-4. 以下の各カテゴリについて具体的かつ実用的な分析結果を生成する:
+2. テキスト説明からテロップの内容傾向、ナレーション有無、BGM言及等を分析する
+3. 以下の各カテゴリについて具体的かつ実用的な分析結果を生成する:
    - SceneStructure: シーン数・尺、フック手法、遷移パターン
    - CaptionTrend: テロップスタイル
    - VisualTrend: シチュエーション・小物・カメラワーク・色調
-   - AudioTrend: BGMテンポ・ジャンル、SE使用箇所（字幕・ユーザー説明から推定）
+   - AudioTrend: BGMテンポ・ジャンル、SE使用箇所（ユーザー説明から推定）
    - AssetRequirement: 必要素材リスト
 
 ## 注意事項
 
-- BPMは字幕やユーザー説明から推定してください（音声分析はできません）
+- BPMはユーザー説明から推定してください（音声分析はできません）
 - 具体的な例を含めてください（例: 「AM 6:00 のテロップで日常感を演出」）
 - 日本語で回答してください
 """
@@ -66,13 +52,12 @@ class TrendAggregator:
         self,
         keyword: str,
         seed_videos: list[SeedVideoData],
-        expanded_videos: list[ExpandedVideoData],
     ) -> TrendReport:
         """全動画データを統合分析し、トレンドレポートを生成する."""
-        contents = self._build_contents(keyword, seed_videos, expanded_videos)
-        total_videos = len(seed_videos) + len(expanded_videos)
+        contents = self._build_contents(keyword, seed_videos)
+        total_videos = len(seed_videos)
 
-        logger.info("LLM統合分析開始: シード%d件, 拡張%d件", len(seed_videos), len(expanded_videos))
+        logger.info("LLM統合分析開始: シード%d件", len(seed_videos))
 
         response = await self._client.aio.models.generate_content(
             model="gemini-2.5-flash",
@@ -100,7 +85,6 @@ class TrendAggregator:
         self,
         keyword: str,
         seed_videos: list[SeedVideoData],
-        expanded_videos: list[ExpandedVideoData],
     ) -> list[types.Part]:
         """LLMへの入力コンテンツを構築する."""
         parts: list[types.Part] = []
@@ -112,14 +96,7 @@ class TrendAggregator:
         for i, seed in enumerate(seed_videos, 1):
             parts.append(
                 types.Part.from_text(
-                    text=f"\n## シード動画 {i}: {seed.metadata.title}\n"
-                    f"- チャンネル: {seed.metadata.channel_title}\n"
-                    f"- 再生数: {seed.metadata.view_count:,}\n"
-                    f"- いいね数: {seed.metadata.like_count:,}\n"
-                    f"- 動画尺: {seed.metadata.duration_sec}秒\n"
-                    f"- タグ: {', '.join(seed.metadata.tags)}\n"
-                    f"- 説明文: {seed.metadata.description[:500]}\n"
-                    f"- ユーザーメモ: {seed.user_note}\n",
+                    text=f"\n## シード動画 {i}\n- ユーザーメモ: {seed.user_note}\n",
                 )
             )
 
@@ -140,33 +117,12 @@ class TrendAggregator:
                     )
                 )
 
-            # 字幕
-            if seed.transcript and seed.transcript.segments:
-                parts.append(
-                    types.Part.from_text(
-                        text=f"\n### 字幕テキスト\n{seed.transcript.full_text}\n",
-                    )
-                )
-
-        # 拡張検索動画（補強材料）
-        if expanded_videos:
-            parts.append(types.Part.from_text(text="\n# 拡張検索動画（補強材料）\n"))
-            for i, expanded in enumerate(expanded_videos, 1):
-                text = (
-                    f"\n## 拡張動画 {i}: {expanded.metadata.title}\n"
-                    f"- 再生数: {expanded.metadata.view_count:,}, 尺: {expanded.metadata.duration_sec}秒\n"
-                    f"- タグ: {', '.join(expanded.metadata.tags)}\n"
-                )
-                if expanded.transcript and expanded.transcript.full_text:
-                    text += f"- 字幕: {expanded.transcript.full_text[:300]}\n"
-                parts.append(types.Part.from_text(text=text))
-
         # 分析指示
-        total = len(seed_videos) + len(expanded_videos)
+        total = len(seed_videos)
         parts.append(
             types.Part.from_text(
                 text=f"\n# 分析指示\n"
-                f"上記の全データを分析し、「{keyword}」ジャンルのYouTubeショート動画の"
+                f"上記の全データを分析し、「{keyword}」ジャンルのショート動画の"
                 f"トレンドレポートをJSON形式で生成してください。\n"
                 f"keyword は「{keyword}」、analyzed_video_count は {total} としてください。\n",
             )

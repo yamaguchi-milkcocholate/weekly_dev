@@ -7,6 +7,7 @@ from daily_routine.pipeline.base import StepEngine
 from daily_routine.schemas.asset import AssetSet, KeyframeAsset
 from daily_routine.schemas.pipeline_io import KeyframeInput
 from daily_routine.schemas.storyboard import Storyboard
+from daily_routine.schemas.style_mapping import StyleMapping
 from daily_routine.visual.clients.gen4_image import ImageGenerationRequest, RunwayImageClient
 
 from .base import KeyframeEngineBase
@@ -40,6 +41,8 @@ class RunwayKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
             storyboard=input_data.storyboard,
             assets=input_data.assets,
             output_dir=output_dir,
+            style_mapping=input_data.style_mapping,
+            project_dir=project_dir,
         )
 
     async def generate_keyframes(
@@ -47,6 +50,8 @@ class RunwayKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
         storyboard: Storyboard,
         assets: AssetSet,
         output_dir: Path,
+        style_mapping: StyleMapping | None = None,
+        project_dir: Path | None = None,
     ) -> AssetSet:
         """全カットのキーフレーム画像を生成する."""
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -65,9 +70,29 @@ class RunwayKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
 
             logger.info("キーフレーム %d/%d (%s) の生成を開始します", i, total_cuts, cut.cut_id)
 
+            # 参照画像の構築
+            reference_images: dict[str, Path] = {"char": reference_image}
+            if style_mapping and project_dir:
+                style_ref = style_mapping.get_reference(cut.scene_number)
+                if style_ref:
+                    resolved = _resolve_style_reference(style_ref, project_dir)
+                    if resolved.exists():
+                        reference_images["location"] = resolved
+                        logger.info(
+                            "スタイル参照画像を適用: scene=%d, path=%s",
+                            cut.scene_number,
+                            resolved,
+                        )
+                    else:
+                        logger.warning(
+                            "スタイル参照画像が見つかりません: scene=%d, path=%s",
+                            cut.scene_number,
+                            style_ref,
+                        )
+
             request = ImageGenerationRequest(
                 prompt=cut.keyframe_prompt,
-                reference_images={"char": reference_image},
+                reference_images=reference_images,
             )
             result = await self._image_client.generate(request, keyframe_path)
 
@@ -101,3 +126,24 @@ class RunwayKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
             msg = f"AssetSet ファイルが見つかりません: {metadata_path}"
             raise FileNotFoundError(msg)
         return AssetSet.model_validate_json(metadata_path.read_text())
+
+
+def _resolve_style_reference(path: Path, project_dir: Path) -> Path:
+    """style_mapping 内のパスを実ファイルパスに解決する.
+
+    Args:
+        path: style_mapping.yaml に記載されたパス
+        project_dir: プロジェクトディレクトリ（outputs/projects/{id}/）
+
+    Returns:
+        解決後の絶対パス
+    """
+    if path.is_absolute():
+        return path
+    # seeds/ で始まるパスはリポジトリルートから解決
+    if path.parts and path.parts[0] == "seeds":
+        # project_dir は outputs/projects/{id}/ なので、3階層上がリポジトリルート
+        repo_root = project_dir.parent.parent.parent
+        return repo_root / path
+    # それ以外はプロジェクトディレクトリからの相対パス
+    return project_dir / path

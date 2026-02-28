@@ -22,7 +22,6 @@ _ENV_PREFIX = "DAILY_ROUTINE_API_KEY_"
 class ApiKeys(BaseModel):
     """APIキー設定."""
 
-    youtube_data_api: str = ""
     openai: str = ""
     google_ai: str = ""
     runway: str = ""

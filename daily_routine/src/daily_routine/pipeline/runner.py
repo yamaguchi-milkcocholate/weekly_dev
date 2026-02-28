@@ -15,6 +15,7 @@ from daily_routine.schemas.project import (
     PipelineState,
     PipelineStep,
 )
+from daily_routine.schemas.style_mapping import StyleMapping
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,13 @@ def _build_input(
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
         storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
         assets = create_engine(PipelineStep.ASSET).load_output(project_dir)
-        return KeyframeInput(scenario=scenario, storyboard=storyboard, assets=assets)
+        style_mapping = _load_style_mapping(project_dir)
+        return KeyframeInput(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            style_mapping=style_mapping,
+        )
     elif step == PipelineStep.VISUAL:
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
         storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
@@ -302,9 +309,7 @@ def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[
 
     if step == PipelineStep.INTELLIGENCE:
         return {
-            "youtube_api_key": api_keys.get("youtube_data_api", ""),
             "google_ai_api_key": api_keys.get("google_ai", ""),
-            "openai_api_key": api_keys.get("openai", ""),
         }
 
     if step == PipelineStep.SCENARIO:
@@ -343,3 +348,20 @@ def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[
         }
 
     return {}
+
+
+_STYLE_MAPPING_FILENAME = "style_mapping.yaml"
+
+
+def _load_style_mapping(project_dir: Path) -> StyleMapping | None:
+    """style_mapping.yaml を読み込む。ファイルが存在しなければ None を返す."""
+
+    mapping_path = project_dir / "storyboard" / _STYLE_MAPPING_FILENAME
+    if not mapping_path.exists():
+        logger.info("style_mapping.yaml が見つかりません。スタイル参照なしで生成します")
+        return None
+
+    import yaml
+
+    data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+    return StyleMapping.model_validate(data)

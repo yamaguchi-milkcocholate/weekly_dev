@@ -12,6 +12,7 @@ from daily_routine.schemas.audio import AudioAsset
 from daily_routine.schemas.intelligence import AudioTrend
 from daily_routine.schemas.scenario import Scenario
 from daily_routine.schemas.storyboard import Storyboard
+from daily_routine.schemas.style_mapping import StyleMapping
 from daily_routine.schemas.visual import VideoClipSet
 
 
@@ -20,7 +21,6 @@ class IntelligenceInput(BaseModel):
 
     keyword: str
     seed_videos: list[SeedVideo] = Field(default_factory=list)
-    max_expand_videos: int = 10
 
 
 class StoryboardInput(BaseModel):
@@ -35,6 +35,7 @@ class KeyframeInput(BaseModel):
     scenario: Scenario
     storyboard: Storyboard
     assets: "AssetSet"
+    style_mapping: StyleMapping | None = None
 
 
 class VisualInput(BaseModel):

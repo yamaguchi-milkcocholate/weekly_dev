@@ -214,7 +214,6 @@ def _load_seeds(seeds_path: Path) -> list[SeedVideo]:
         ]
         seed_videos.append(
             SeedVideo(
-                url=entry["url"],
                 note=entry.get("note", ""),
                 scene_captures=captures,
             )

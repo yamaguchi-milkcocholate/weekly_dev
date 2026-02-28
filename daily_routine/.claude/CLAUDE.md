@@ -51,8 +51,9 @@ docs/
 ├── specs/          # 仕様書（何を作るか）
 ├── designs/        # 設計書（どうやって作るか）
 ├── adrs/           # ADR（何を採用したか）
-├── guidelines/     # 開発ガイドライン
-└── procedures/     # 手順書
+├── guidelines/                 # 開発ガイドライン
+├── procedures/                 # 手順書
+└── image_gen_best_practices/   # 画像生成タスク別ベストプラクティス（PoC知見の蓄積）
 ```
 
 **重要な設計原則:**
@@ -85,3 +86,4 @@ docs/
 ## ガイドライン
 
 - 画像・動画生成プロンプトを作成・レビューする際は `/docs/guidelines/visual_prompt.md` を必ず参照すること
+- 画像生成の手法選定・パイプライン設計時は `/docs/image_gen_best_practices/` のタスク別ベストプラクティスを参照すること

@@ -14,6 +14,7 @@ from daily_routine.pipeline.runner import (
     _engine_kwargs,
     _get_next_step,
     _get_previous_step,
+    _load_style_mapping,
     resume_pipeline,
     retry_pipeline,
     run_pipeline,
@@ -107,7 +108,7 @@ class TestRunPipeline:
     @pytest.mark.asyncio
     async def test_seed_videos付きで実行(self, tmp_path) -> None:
         seeds = [
-            SeedVideo(url="https://www.youtube.com/watch?v=abc123", note="テスト動画"),
+            SeedVideo(note="テスト動画"),
         ]
         state = await run_pipeline(tmp_path, "test-project", "OLの一日", seed_videos=seeds)
 
@@ -120,12 +121,12 @@ class TestBuildInput:
 
     def test_intelligence_seed_videosが渡される(self, tmp_path) -> None:
         seeds = [
-            SeedVideo(url="https://www.youtube.com/watch?v=abc123", note="参考動画"),
+            SeedVideo(note="参考動画"),
         ]
         result = _build_input(PipelineStep.INTELLIGENCE, tmp_path, keyword="テスト", seed_videos=seeds)
         assert result.keyword == "テスト"
         assert len(result.seed_videos) == 1
-        assert result.seed_videos[0].url == "https://www.youtube.com/watch?v=abc123"
+        assert result.seed_videos[0].note == "参考動画"
 
     def test_intelligence_seed_videos省略時は空(self, tmp_path) -> None:
         result = _build_input(PipelineStep.INTELLIGENCE, tmp_path, keyword="テスト")
@@ -251,23 +252,17 @@ class TestEngineKwargs:
 
     def test_intelligence_APIキーが渡される(self) -> None:
         api_keys = {
-            "youtube_data_api": "yt-key",
             "google_ai": "gai-key",
-            "openai": "oai-key",
         }
         result = _engine_kwargs(PipelineStep.INTELLIGENCE, api_keys)
         assert result == {
-            "youtube_api_key": "yt-key",
             "google_ai_api_key": "gai-key",
-            "openai_api_key": "oai-key",
         }
 
     def test_intelligence_キー未設定_空文字(self) -> None:
         result = _engine_kwargs(PipelineStep.INTELLIGENCE, {})
         assert result == {
-            "youtube_api_key": "",
             "google_ai_api_key": "",
-            "openai_api_key": "",
         }
 
     def test_api_keysがNoneの場合_空dict(self) -> None:
@@ -298,3 +293,41 @@ class TestEngineKwargs:
         api_keys = {"youtube_data_api": "yt-key"}
         result = _engine_kwargs(PipelineStep.POST_PRODUCTION, api_keys)
         assert result == {}
+
+
+class TestLoadStyleMapping:
+    """_load_style_mapping のテスト."""
+
+    def test_ファイルが存在しない_None(self, tmp_path: Path) -> None:
+        result = _load_style_mapping(tmp_path)
+        assert result is None
+
+    def test_ファイルが存在する_StyleMapping返却(self, tmp_path: Path) -> None:
+        storyboard_dir = tmp_path / "storyboard"
+        storyboard_dir.mkdir()
+        mapping_file = storyboard_dir / "style_mapping.yaml"
+        mapping_file.write_text(
+            "mappings:\n"
+            "  - scene_number: 1\n"
+            '    reference: "seeds/captures/abc/7.png"\n'
+            "  - scene_number: 3\n"
+            '    reference: "assets/reference/cafe.png"\n',
+            encoding="utf-8",
+        )
+
+        result = _load_style_mapping(tmp_path)
+        assert result is not None
+        assert len(result.mappings) == 2
+        assert result.get_reference(1) == Path("seeds/captures/abc/7.png")
+        assert result.get_reference(3) == Path("assets/reference/cafe.png")
+        assert result.get_reference(2) is None
+
+    def test_空マッピング_空リスト(self, tmp_path: Path) -> None:
+        storyboard_dir = tmp_path / "storyboard"
+        storyboard_dir.mkdir()
+        mapping_file = storyboard_dir / "style_mapping.yaml"
+        mapping_file.write_text("mappings: []\n", encoding="utf-8")
+
+        result = _load_style_mapping(tmp_path)
+        assert result is not None
+        assert len(result.mappings) == 0
