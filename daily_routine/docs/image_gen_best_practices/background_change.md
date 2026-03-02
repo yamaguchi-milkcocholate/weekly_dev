@@ -8,36 +8,35 @@
 
 ## プロンプトテンプレート（推奨）
 
-Phase A-3 検証で最も安定した結果を出した B2（画像役割記述）パターン。
-背景参照画像 + 画像役割の明示 + 簡潔な保持指示の組み合わせ。
+seed 画像 + 背景参照画像の **2枚入力**。画像役割の明示 + 簡潔な保持指示の組み合わせ。
 
 ```
-Image 1 is the character reference showing the target person's appearance.
-Image 2 is the scene to edit.
-Image 3 shows the target background environment.
-Replace the background in image 2 with the environment from image 3.
-Keep the person exactly as they appear in image 2.
+Image 1 is the scene to edit.
+Image 2 shows the target background environment.
+Replace the background in image 1 with the environment from image 2.
+Keep the person exactly as they appear in image 1.
 Single person only, solo.
 ```
 
 ### 入力構成
 
 ```
-[キャラ参照画像(image 1)] + [seed画像(image 2)] + [背景参照画像(image 3)] + テキスト
+[seed画像(image 1)] + [背景参照画像(image 2)] + テキスト
 ```
 
-- image 1: キャラクター参照（front.png）
-- image 2: 編集対象の seed 画像
-- image 3: ターゲット背景の参照画像
+- image 1: 編集対象の seed 画像
+- image 2: ターゲット背景の参照画像
+- **キャラクター参照は入力しない**（人物差替のトリガーになるため）
 
-### なぜ B2 が最強か
+### なぜこの構成が最良か
 
-背景変更タスクの鍵は、モデルを**編集モード**で動作させること。B2 は以下の理由で最も安定する:
+背景変更タスクの鍵は、モデルを**編集モード**で動作させること。以下の理由で最も安定する:
 
-1. **画像役割の明示**: 3枚の画像の用途をモデルが迷わない
+1. **画像役割の明示**: 2枚の画像の用途をモデルが迷わない
 2. **`Replace the background`**: 背景の置換という編集指示が明確
 3. **Identity Block を含まない**: 人物をテキストで記述しないため、人物が再生成されない
-4. **テキストオーバーレイの保持**: 元画像のテキスト要素も維持される傾向
+4. **キャラクター参照画像を含まない**: 参照画像を渡すだけでもモデルが人物差替を実行するリスクがある
+5. **テキストオーバーレイの保持**: 元画像のテキスト要素も維持される傾向
 
 ---
 
@@ -65,7 +64,7 @@ seed画像をベースに背景部分だけを書き換える（inpainting的処
 → 空間認識✗（バーチャル背景のように壁紙を貼り付けた感じ）
 ```
 
-**トリガー**: Identity Block、`Place the person into`、`She is now standing`
+**トリガー**: Identity Block、キャラクター参照画像の入力、`Place the person into`、`She is now standing`
 
 ---
 
@@ -77,7 +76,7 @@ seed画像をベースに背景部分だけを書き換える（inpainting的処
 | ----------------- | --------------------------------- | --------------------------------- |
 | Identity Block    | **必須**（服装反映に必要）        | **NG**（人物が再生成される）      |
 | ALL CAPS 保持指示 | **有効**（背景保持に効果）        | 不要                              |
-| 参照画像の用途    | キャラ参照 → 人物の顔を一致させる | 背景参照 → 環境の雰囲気を指定する |
+| 参照画像の用途    | キャラ参照 → 人物の顔を一致させる | 背景参照のみ（キャラ参照は NG）   |
 | モデルの動作      | 人物を生成、背景を保持            | 背景を生成、人物を保持            |
 
 **理由**: 人物差し替えでは「人物を新しく生成する」のが目的なので Identity Block が有効。背景変更では「人物をそのまま保持する」のが目的なので、人物をテキストで記述すると逆に再生成されてしまう。
@@ -124,7 +123,8 @@ a scenic riverside path lined with blooming cherry blossom trees.
 | 人物の新しい状況を記述      | `She is now standing...` でポーズが変更される                           | 人物の状況は記述しない                                           |
 | ALL CAPS 人物保持指示       | `MUST preserve the person` が Identity Block 同様に再生成トリガーになる | 簡潔な `Keep the person exactly as they appear` で十分           |
 | 照明変更の明示的許可        | `Adjust the lighting` が人物の再構築を引き起こす                        | 照明指示は省略する（モデルが自然に調整する）                     |
-| 画像役割の省略（3枚入力時） | モデルが3枚の画像の用途を混同する                                       | 各画像の役割を冒頭で明示する                                     |
+| キャラクター参照画像を入力  | モデルが人物差替を実行してしまう（服装・体型・顔が参照画像に置換）      | 背景変更では seed + 背景参照の2枚のみ入力する                    |
+| 画像役割の省略              | モデルが画像の用途を混同する                                            | 各画像の役割を冒頭で明示する                                     |
 | seed のポーズと背景の不整合 | 座りデスクシーン + 屋外背景 → 不自然な合成感                            | ポーズと背景の状況的整合性を事前に考慮する                       |
 
 ---
@@ -167,6 +167,22 @@ a scenic riverside path lined with blooming cherry blossom trees.
 - 実験ログ: `poc/seamless/generated/phase_a3/experiment_log.json`
 - 実験スクリプト: `poc/seamless/run_phase_a3.py`
 - 実験設定: `poc/seamless/config_a3.py`
+
+### Phase B-1: パイプライン検証で判明した追加知見（2026-03-02）
+
+A-3 のベストプラクティスをパイプラインに組み込む過程で、以下が判明した。
+
+#### キャラクター参照画像が人物差替を誘発する
+
+A-3 では3枚入力（キャラ参照 + seed + 背景参照）で検証し、B2 プロンプトは `Keep the person exactly as they appear in image 2` で人物保持を指示していた。しかし B-1 パイプライン検証で同じ構成を再実行したところ、**モデルがキャラクター参照画像を使って人物を差し替えてしまう**ケースが確認された。
+
+プロンプトにはテキストで Identity Block を含めていないが、**キャラクター参照画像を入力するだけで生成モードのトリガーになりうる**。
+
+2枚入力（seed + 背景参照のみ）に変更したところ、人物差替は発生しなくなった。上記の推奨テンプレートは B-1 知見を反映した2枚入力版に更新済み。
+
+#### preview モデルの再現性に関する注意
+
+A-3 検証時（2026-02-28）と B-1 検証時（2026-03-02）で、同一条件（同じモデル・プロンプト・入力画像）にもかかわらず品質に差が確認された。`-preview` モデルは予告なくモデルの重みが更新される可能性があり、過去の検証結果が将来も再現される保証はない。ベストプラクティスの**原理（編集モード vs 生成モード）**は安定しているが、具体的な品質水準は変動しうる。
 
 ---
 

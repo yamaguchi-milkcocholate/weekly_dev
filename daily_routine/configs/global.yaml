@@ -3,7 +3,6 @@ data_root: outputs
 
 # APIキー（環境変数 DAILY_ROUTINE_API_KEY_{NAME} でオーバーライド可能）
 api_keys:
-  youtube_data_api: ""
   openai: ""
   google_ai: ""
   runway: ""
