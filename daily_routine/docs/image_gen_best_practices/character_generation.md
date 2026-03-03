@@ -60,7 +60,7 @@ Flash 記述 + 参照画像でアングル別に生成する。
 Image 1 shows the reference person. Image 2 shows the outfit.
 Generate a photo of the following character:
 [Flash生成記述]
-Full body shot from head to feet, standing, [アングル指示], neutral background.
+Full body shot from head to feet, standing, [アングル指示], solid bright green chroma key background (#00FF00).
 The entire body including shoes must be fully visible with space below the feet.
 Single person only, solo.
 ```
@@ -95,7 +95,7 @@ Image 1 shows a reference character.
 Generate a photo of a SIMILAR but DIFFERENT character.
 Keep: face shape, age range, body type, skin tone.
 Change: outfit to a different casual style, hairstyle to a slightly different style.
-Full body shot from head to feet, standing, neutral background.
+Full body shot from head to feet, standing, solid bright green chroma key background (#00FF00).
 The entire body including shoes must be fully visible with space below the feet.
 This must be a DIFFERENT person, not the same person in different clothes.
 ```
@@ -107,7 +107,7 @@ This must be a DIFFERENT person, not the same person in different clothes.
 `"Full body shot"` だけでは足元が切れるリスクがある。以下を明示的に追加する:
 
 ```
-Full body shot from head to feet, standing, [direction], neutral background.
+Full body shot from head to feet, standing, [direction], solid bright green chroma key background (#00FF00).
 The entire body including shoes must be fully visible with space below the feet.
 ```
 

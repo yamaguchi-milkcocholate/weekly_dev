@@ -1,19 +1,36 @@
 """Gemini C3-I1 キーフレーム生成エンジン."""
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from daily_routine.pipeline.base import StepEngine
 from daily_routine.schemas.asset import AssetSet, CharacterAsset, KeyframeAsset
-from daily_routine.schemas.keyframe_mapping import KeyframeMapping, SceneKeyframeSpec
+from daily_routine.schemas.keyframe_mapping import (
+    CharacterComponent,
+    KeyframeMapping,
+    ReferenceComponent,
+    SceneKeyframeSpec,
+)
 from daily_routine.schemas.pipeline_io import KeyframeInput
 from daily_routine.schemas.scenario import Scenario
 from daily_routine.schemas.storyboard import Storyboard
 
 from .base import KeyframeEngineBase
 from .client import GeminiKeyframeClient
+from .prompt import ReferenceInfo
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ResolvedComponents:
+    """コンポーネント解決結果."""
+
+    char_images: list[Path] = field(default_factory=list)
+    identity_blocks: list[str] = field(default_factory=list)
+    reference_images: list[Path] = field(default_factory=list)
+    reference_infos: list[ReferenceInfo] = field(default_factory=list)
 
 
 class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBase):
@@ -72,45 +89,37 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
             # KeyframeMapping 参照（シーン単位、同一シーン内の全カットに同じマッピングを適用）
             spec = keyframe_mapping.get_spec(cut.scene_number) if keyframe_mapping else None
 
-            # キャラクター解決: マッピング指定（character_name 検索）→ デフォルト（先頭）
-            char = self._resolve_character(assets, spec)
-            char_image = char.front_view
-            identity_block = char.identity_block
+            # コンポーネント解決
+            resolved = self._resolve_components(assets, spec)
 
             # 環境解決: マッピング指定（description 検索）→ scene_number 検索
             env_image = self._resolve_environment(assets, cut.scene_number, spec)
 
             # ポーズ取得
             pose_instruction = cut.pose_instruction
-
-            # マッピングからの追加情報
-            reference_image: Path | None = None
-            reference_text = ""
-            if spec:
-                reference_image = spec.reference_image
-                reference_text = spec.reference_text
-                if spec.pose and not pose_instruction:
-                    pose_instruction = spec.pose
+            if spec and spec.pose and not pose_instruction:
+                pose_instruction = spec.pose
 
             # Step 1: Flash シーン分析
             logger.info("  Step 1: Flash シーン分析")
             flash_prompt = await self._client.analyze_scene(
-                char_image=char_image,
+                char_images=resolved.char_images,
                 env_image=env_image,
-                identity_block=identity_block,
+                identity_blocks=resolved.identity_blocks,
                 pose_instruction=pose_instruction,
-                reference_image=reference_image,
-                reference_text=reference_text,
+                reference_images=resolved.reference_images,
+                reference_infos=resolved.reference_infos,
             )
             logger.info("  Flash 生成プロンプト: %s", flash_prompt[:200])
 
             # Step 2: Pro シーン画像生成
             logger.info("  Step 2: Pro シーン画像生成")
             result_path = await self._client.generate_keyframe(
-                char_image=char_image,
+                char_images=resolved.char_images,
                 env_image=env_image,
                 flash_prompt=flash_prompt,
-                reference_image=reference_image,
+                reference_images=resolved.reference_images,
+                reference_infos=resolved.reference_infos,
                 output_path=keyframe_path,
             )
 
@@ -129,26 +138,62 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
         return assets.model_copy(update={"keyframes": keyframes})
 
     @staticmethod
-    def _resolve_character(assets: AssetSet, spec: SceneKeyframeSpec | None) -> CharacterAsset:
-        """マッピング指定のキャラクターを解決する。未指定・未発見時はデフォルト（先頭）."""
-        if spec and spec.character:
-            if spec.variant_id:
-                # character_name + variant_id で完全一致
+    def _resolve_components(assets: AssetSet, spec: SceneKeyframeSpec | None) -> ResolvedComponents:
+        """spec.components をイテレートしてコンポーネントを解決する."""
+        resolved = ResolvedComponents()
+
+        if not spec or not spec.components:
+            # コンポーネント未指定 → デフォルト（先頭キャラクター）
+            char = assets.characters[0]
+            resolved.char_images.append(char.front_view)
+            resolved.identity_blocks.append(char.identity_block)
+            return resolved
+
+        for component in spec.components:
+            if isinstance(component, CharacterComponent):
+                char = GeminiKeyframeEngine._find_character_asset(
+                    assets, component.character, component.variant_id
+                )
+                resolved.char_images.append(char.front_view)
+                resolved.identity_blocks.append(char.identity_block)
+            elif isinstance(component, ReferenceComponent):
+                if component.image:
+                    resolved.reference_images.append(component.image)
+                resolved.reference_infos.append(
+                    ReferenceInfo(
+                        purpose=str(component.purpose),
+                        text=component.text,
+                        has_image=component.image is not None,
+                    )
+                )
+
+        # キャラクターが1つも解決されなかった場合、デフォルトを使用
+        if not resolved.char_images:
+            char = assets.characters[0]
+            resolved.char_images.append(char.front_view)
+            resolved.identity_blocks.append(char.identity_block)
+
+        return resolved
+
+    @staticmethod
+    def _find_character_asset(assets: AssetSet, character_name: str, variant_id: str = "") -> CharacterAsset:
+        """キャラクター名 + variant_id で AssetSet からキャラクターを検索する."""
+        if character_name:
+            if variant_id:
                 for char in assets.characters:
-                    if char.character_name == spec.character and char.variant_id == spec.variant_id:
+                    if char.character_name == character_name and char.variant_id == variant_id:
                         return char
                 logger.warning(
                     "キャラクター '%s' variant '%s' が見つかりません。名前のみで検索します",
-                    spec.character,
-                    spec.variant_id,
+                    character_name,
+                    variant_id,
                 )
-            # character_name の最初のバリアント
             for char in assets.characters:
-                if char.character_name == spec.character:
+                if char.character_name == character_name:
                     return char
             logger.warning(
                 "マッピング指定のキャラクター '%s' が見つかりません。デフォルトを使用します",
-                spec.character,
+                character_name,
             )
         return assets.characters[0]
 

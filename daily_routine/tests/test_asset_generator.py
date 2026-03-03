@@ -53,7 +53,7 @@ def character():
         name="Aoi",
         appearance="25-year-old Japanese woman",
         outfit="navy blue blazer",
-        reference_prompt="A 25-year-old Japanese woman, front view, white background",
+        reference_prompt="A 25-year-old Japanese woman, front view, green chroma key background",
     )
 
 

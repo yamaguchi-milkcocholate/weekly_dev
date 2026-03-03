@@ -377,7 +377,7 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
     """
     import yaml
 
-    from daily_routine.schemas.keyframe_mapping import SceneKeyframeSpec
+    from daily_routine.schemas.keyframe_mapping import CharacterComponent, SceneKeyframeSpec
 
     mapping_path = project_dir / "storyboard" / _KEYFRAME_MAPPING_FILENAME
     if mapping_path.exists():
@@ -398,8 +398,15 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
             continue
         seen_scene_numbers.add(scene.scene_number)
 
-        character = assets.characters[0].character_name if assets.characters else ""
-        variant_id = assets.characters[0].variant_id if assets.characters else ""
+        components = []
+        if assets.characters:
+            components.append(
+                CharacterComponent(
+                    character=assets.characters[0].character_name,
+                    variant_id=assets.characters[0].variant_id,
+                )
+            )
+
         environment = ""
         for env in assets.environments:
             if env.scene_number == scene.scene_number:
@@ -409,15 +416,13 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
         if scene.cuts:
             pose = scene.cuts[0].pose_instruction
 
-        scenes.append(
-            SceneKeyframeSpec(
-                scene_number=scene.scene_number,
-                character=character,
-                variant_id=variant_id,
-                environment=environment,
-                pose=pose,
-            ).model_dump(mode="json")
+        spec = SceneKeyframeSpec(
+            scene_number=scene.scene_number,
+            environment=environment,
+            pose=pose,
+            components=components,
         )
+        scenes.append(spec.model_dump(mode="json", exclude_defaults=True))
 
     mapping_data = {"scenes": scenes}
     mapping_path.parent.mkdir(parents=True, exist_ok=True)

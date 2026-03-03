@@ -220,35 +220,52 @@ assets/reference/environments/
 | `reference` | 実在の場所の雰囲気を忠実に再現したい | 参照写真（人物入り可） |
 | `generate` | 参照写真がない / 架空の場所 | SceneSpec.image_prompt（自動） |
 
-#### Keyframe ステップの衣装バリアント指定（keyframe_mapping.yaml）
+#### Keyframe ステップのコンポーネント指定（keyframe_mapping.yaml）
 
-Asset ステップ完了後のチェックポイントで `storyboard/keyframe_mapping.yaml` が自動生成される。衣装バリアントを使用している場合、各シーンに `variant_id` を指定して衣装を切り替える。
+Asset ステップ完了後のチェックポイントで `storyboard/keyframe_mapping.yaml` が自動生成される。`components` リストでシーンごとのキャラクター・参照コンポーネントを指定する。
 
 ```yaml
 # storyboard/keyframe_mapping.yaml（自動生成 → ユーザー編集）
 scenes:
   - scene_number: 1
-    character: "Aoi"
-    variant_id: "pajama"         # 朝のシーン → パジャマ
     environment: "bedroom"
     pose: "stretching"
+    components:
+      - type: character
+        character: "Aoi"
+        variant_id: "pajama"       # 朝のシーン → パジャマ
 
   - scene_number: 3
-    character: "Aoi"
-    variant_id: "suit"           # 通勤シーン → スーツ
     environment: "office"
     pose: "walking"
+    components:
+      - type: character
+        character: "Aoi"
+        variant_id: "suit"         # 通勤シーン → スーツ
 
-  - scene_number: 7
-    character: "Aoi"
-    variant_id: "casual"         # 夜のシーン → カジュアル
-    environment: "cafe"
-    pose: "sitting"
+  - scene_number: 5
+    environment: "カフェ"
+    pose: "向かい合ってコーヒーを飲む"
+    components:
+      - type: character
+        character: "Aoi"
+        variant_id: "casual"       # 夜のシーン → カジュアル
+      - type: character
+        character: "Saki"
+        variant_id: "casual"       # ツーショット相手
+      - type: reference
+        image: "reference/latte.png"
+        text: "特大のラテカップ"   # オブジェクト参照
 ```
 
-- `variant_id` を指定すると、対応する衣装バリアントの `CharacterAsset`（3アングル画像 + Identity Block）が使用される
+**コンポーネントの種類:**
+- `type: character` — `character` + `variant_id` で AssetSet から `front_view` + `identity_block` を自動解決。先頭が主キャラクター
+- `type: reference` — 画像パス（`image`）やテキスト（`text`）で雰囲気・オブジェクトを参照
+
+**補足:**
 - `variant_id` を省略（空文字）すると、そのキャラクター名で最初に見つかったバリアントが使用される
 - 自動生成時は先頭バリアントが全シーンに割り当てられるため、ユーザーが各シーンの衣装を手動で編集する
+- 旧フォーマット（`character`/`variant_id`/`reference_image`/`reference_text` をフラットに記述）も後方互換で自動変換される
 
 ### 2.5 エラー時の再試行
 

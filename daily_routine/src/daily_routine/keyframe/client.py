@@ -7,7 +7,7 @@ from pathlib import Path
 from google import genai
 from google.genai.types import GenerateContentConfig, ImageConfig, Part
 
-from .prompt import C3I1_FLASH_META_PROMPT, C3I1_GENERATION_TEMPLATE
+from .prompt import ReferenceInfo, build_flash_meta_prompt, build_generation_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,22 @@ def _load_image_part(image_path: Path) -> Part:
     return Part.from_bytes(data=data, mime_type=mime)
 
 
+_CONTENT_TEXT_BY_PURPOSE: dict[str, str] = {
+    "wearing": "Item reference (character wears this): {text}",
+    "holding": "Item reference (character holds this): {text}",
+    "atmosphere": "Atmosphere/style reference: {text}",
+    "background": "Background object reference: {text}",
+    "interaction": "Item reference (character uses this): {text}",
+    "general": "Additional reference: {text}",
+}
+
+
+def _build_reference_content_text(info: ReferenceInfo) -> str:
+    """ReferenceInfo から contents に追加するテキストを生成する."""
+    template = _CONTENT_TEXT_BY_PURPOSE.get(info.purpose, _CONTENT_TEXT_BY_PURPOSE["general"])
+    return template.format(text=info.text)
+
+
 class GeminiKeyframeClient:
     """Gemini C3-I1 キーフレーム生成クライアント（Flash+Pro 2パス）."""
 
@@ -33,27 +49,37 @@ class GeminiKeyframeClient:
 
     async def analyze_scene(
         self,
-        char_image: Path,
+        char_images: list[Path],
         env_image: Path | None,
-        identity_block: str,
+        identity_blocks: list[str],
         pose_instruction: str,
-        reference_image: Path | None = None,
-        reference_text: str = "",
+        reference_images: list[Path] | None = None,
+        reference_infos: list[ReferenceInfo] | None = None,
     ) -> str:
         """Step 1: Flash 最小指示分析 -> シーンプロンプト."""
-        meta_prompt = (
-            C3I1_FLASH_META_PROMPT
-            .replace("{{identity_block}}", identity_block)
-            .replace("{{pose_instruction}}", pose_instruction)
+        ref_images = reference_images or []
+        ref_infos = reference_infos or []
+        has_env = env_image is not None and env_image.exists()
+
+        meta_prompt = build_flash_meta_prompt(
+            identity_blocks=identity_blocks,
+            pose_instruction=pose_instruction,
+            num_char_images=len(char_images),
+            has_env_image=has_env,
+            reference_infos=ref_infos,
         )
 
-        contents: list[Part | str] = [_load_image_part(char_image)]
-        if env_image and env_image.exists():
-            contents.append(_load_image_part(env_image))
-        if reference_image and reference_image.exists():
-            contents.append(_load_image_part(reference_image))
-        if reference_text:
-            contents.append(f"Additional reference: {reference_text}")
+        contents: list[Part | str] = []
+        for img in char_images:
+            contents.append(_load_image_part(img))
+        if has_env:
+            contents.append(_load_image_part(env_image))  # type: ignore[arg-type]
+        for ref_img in ref_images:
+            if ref_img.exists():
+                contents.append(_load_image_part(ref_img))
+        for info in ref_infos:
+            if info.text:
+                contents.append(_build_reference_content_text(info))
         contents.append(meta_prompt)
 
         config = GenerateContentConfig(
@@ -71,20 +97,33 @@ class GeminiKeyframeClient:
 
     async def generate_keyframe(
         self,
-        char_image: Path,
+        char_images: list[Path],
         env_image: Path | None,
         flash_prompt: str,
-        reference_image: Path | None = None,
+        reference_images: list[Path] | None = None,
+        reference_infos: list[ReferenceInfo] | None = None,
         output_path: Path = Path("keyframe.png"),
     ) -> Path:
         """Step 2: Pro シーン画像生成 -> キーフレーム画像(9:16)."""
-        generation_prompt = C3I1_GENERATION_TEMPLATE.replace("{{flash_prompt}}", flash_prompt)
+        ref_images = reference_images or []
+        ref_infos = reference_infos or []
+        has_env = env_image is not None and env_image.exists()
 
-        contents: list[Part | str] = [_load_image_part(char_image)]
-        if env_image and env_image.exists():
-            contents.append(_load_image_part(env_image))
-        if reference_image and reference_image.exists():
-            contents.append(_load_image_part(reference_image))
+        generation_prompt = build_generation_prompt(
+            flash_prompt=flash_prompt,
+            num_char_images=len(char_images),
+            has_env_image=has_env,
+            reference_infos=ref_infos,
+        )
+
+        contents: list[Part | str] = []
+        for img in char_images:
+            contents.append(_load_image_part(img))
+        if has_env:
+            contents.append(_load_image_part(env_image))  # type: ignore[arg-type]
+        for ref_img in ref_images:
+            if ref_img.exists():
+                contents.append(_load_image_part(ref_img))
         contents.append(generation_prompt)
 
         config = GenerateContentConfig(

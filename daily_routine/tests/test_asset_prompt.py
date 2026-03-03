@@ -5,10 +5,10 @@ import pytest
 from daily_routine.asset.prompt import (
     _C2_TEXT_GENERATION_SUFFIX,
     _C2R2_BASE_PROMPT,
+    _CHARACTER_BG,
     _MA_ANGLE_INSTRUCTIONS,
     _STYLE_SUFFIX,
     _VIEW_PROMPTS,
-    _WHITE_BG,
     FLASH_FUSION_ANALYSIS_PROMPT,
     IDENTITY_BLOCK_EXTRACTION_PROMPT,
     PromptBuilder,
@@ -30,7 +30,7 @@ def character():
         reference_prompt=(
             "A 25-year-old Japanese woman with shoulder-length black hair. "
             "Wearing navy blue blazer over white blouse, gray pencil skirt. "
-            "Full body standing pose, front view, plain white background, studio lighting, "
+            "Full body standing pose, front view, solid bright green chroma key background (#00FF00), studio lighting, "
             "semi-realistic style, high quality"
         ),
     )
@@ -62,7 +62,7 @@ class TestBuildCharacterPrompt:
         assert character.appearance in result
         assert character.outfit in result
         assert _STYLE_SUFFIX in result
-        assert _WHITE_BG in result
+        assert _CHARACTER_BG in result
 
     def test_横向き_参照あり_sideビュープロンプト(self, builder, character):
         result = builder.build_character_prompt(character, "side", has_reference=True)
@@ -123,7 +123,7 @@ class TestBuildAutoPersonPrompt:
         result = builder.build_auto_person_prompt("25-year-old Japanese woman, shoulder-length black hair")
         assert "25-year-old Japanese woman, shoulder-length black hair" in result
         assert "Full body shot from head to feet" in result
-        assert "plain white background" in result
+        assert "solid bright green chroma key background" in result
 
     def test_構造(self, builder):
         result = builder.build_auto_person_prompt("test appearance")

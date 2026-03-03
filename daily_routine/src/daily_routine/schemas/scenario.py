@@ -31,7 +31,7 @@ class CharacterSpec(BaseModel):
     outfit: str = Field(description="服装の詳細説明（英語）")
     reference_prompt: str = Field(
         description="Asset Generator用の正面リファレンス画像生成プロンプト（英語）。"
-        "白背景、スタジオライティング、全身立ちポーズ"
+        "グリーンバック（クロマキー緑）、スタジオライティング、全身立ちポーズ"
     )
 
 

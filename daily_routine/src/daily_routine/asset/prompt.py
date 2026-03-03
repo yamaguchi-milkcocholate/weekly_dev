@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # PoC (poc/image_gen/config.py) で実証済みのスタイル指定
 _STYLE_SUFFIX = "semi-realistic style, high quality, studio lighting"
-_WHITE_BG = "plain white background"
+_CHARACTER_BG = "solid bright green chroma key background (#00FF00)"
 
 # ビュー別のポーズ・アングル指定（PoC の VIEW_PROMPTS 構造を踏襲）
 # C1-F2-MA 検証で確立された全身条件を反映
@@ -57,7 +57,8 @@ _MA_GENERATION_TEMPLATE = (
     "Image 1 shows the reference person. Image 2 shows the outfit.\n"
     "Generate a photo of the following character:\n"
     "{flash_description}\n"
-    "Full body shot from head to feet, standing, {angle_instruction}, neutral background.\n"
+    "Full body shot from head to feet, standing, {angle_instruction}, "
+    "solid bright green chroma key background (#00FF00).\n"
     "The entire body including shoes must be fully visible with space below the feet.\n"
     "Single person only, solo."
 )
@@ -73,7 +74,8 @@ _MA_ANGLE_INSTRUCTIONS: dict[str, str] = {
 _AUTO_PERSON_TEMPLATE = (
     "A person with the following appearance:\n"
     "{appearance}\n"
-    "Full body shot from head to feet, standing, facing the camera, plain white background.\n"
+    "Full body shot from head to feet, standing, facing the camera, "
+    "solid bright green chroma key background (#00FF00).\n"
     "The entire body including shoes must be fully visible with space below the feet.\n"
     "Single person only, solo. Photo-realistic, studio lighting."
 )
@@ -125,7 +127,7 @@ class PromptBuilder:
                 f"Generate this same character in {view} view. "
                 f"Maintain the exact same appearance, clothing, and style as the reference image. "
                 f"{character.appearance}. {character.outfit}. "
-                f"{view_prompt}, {_WHITE_BG}, {_STYLE_SUFFIX}"
+                f"{view_prompt}, {_CHARACTER_BG}, {_STYLE_SUFFIX}"
             )
 
         # モードA: プロンプトのみ（正面画像生成時）
@@ -134,7 +136,7 @@ class PromptBuilder:
             return character.reference_prompt
 
         # 正面以外でも参照なしの場合（通常は発生しないが安全のため）
-        return f"{character.appearance}. {character.outfit}. {view_prompt}, {_WHITE_BG}, {_STYLE_SUFFIX}"
+        return f"{character.appearance}. {character.outfit}. {view_prompt}, {_CHARACTER_BG}, {_STYLE_SUFFIX}"
 
     def build_ma_generation_prompt(self, flash_description: str, view: str) -> str:
         """C1-F2-MA マルチアングル生成プロンプトを構築する.

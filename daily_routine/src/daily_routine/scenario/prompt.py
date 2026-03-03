@@ -75,7 +75,7 @@ class ScenarioPromptBuilder:
 - appearance: 年齢、髪型、髪色、体型などの具体的な外見描写（英語）
 - outfit: 服装の具体的な描写（英語）
 - reference_prompt: Asset Generator が正面リファレンス画像を生成するための詳細プロンプト（英語）。\
-白背景、スタジオライティング、全身立ちポーズを含む。\
+グリーンバック（solid bright green chroma key background）、スタジオライティング、全身立ちポーズを含む。\
 このプロンプトは正面画像の起点用であり、横・背面・表情バリエーションは別途派生させる
 
 ### 3. シーン仕様（scenes）

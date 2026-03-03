@@ -7,6 +7,14 @@ import pytest
 
 from daily_routine.keyframe.engine import GeminiKeyframeEngine
 from daily_routine.schemas.asset import AssetSet, CharacterAsset, KeyframeAsset
+from daily_routine.keyframe.prompt import ReferenceInfo
+from daily_routine.schemas.keyframe_mapping import (
+    CharacterComponent,
+    KeyframeMapping,
+    ReferenceComponent,
+    ReferencePurpose,
+    SceneKeyframeSpec,
+)
 from daily_routine.schemas.pipeline_io import KeyframeInput
 from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 from daily_routine.schemas.storyboard import (
@@ -147,12 +155,47 @@ def sample_assets(tmp_path: Path) -> AssetSet:
     )
 
 
+@pytest.fixture
+def multi_char_assets(tmp_path: Path) -> AssetSet:
+    """テスト用AssetSet（複数キャラクター）."""
+    aoi_dir = tmp_path / "assets" / "character" / "Aoi"
+    aoi_dir.mkdir(parents=True)
+    aoi_front = aoi_dir / "front.png"
+    aoi_front.write_bytes(b"fake-aoi")
+
+    saki_dir = tmp_path / "assets" / "character" / "Saki"
+    saki_dir.mkdir(parents=True)
+    saki_front = saki_dir / "front.png"
+    saki_front.write_bytes(b"fake-saki")
+
+    return AssetSet(
+        characters=[
+            CharacterAsset(
+                character_name="Aoi",
+                front_view=aoi_front,
+                side_view=aoi_dir / "side.png",
+                back_view=aoi_dir / "back.png",
+                identity_block="Young adult female, dark brown hair",
+            ),
+            CharacterAsset(
+                character_name="Saki",
+                front_view=saki_front,
+                side_view=saki_dir / "side.png",
+                back_view=saki_dir / "back.png",
+                identity_block="Young adult female, blonde hair",
+            ),
+        ],
+    )
+
+
 def _make_mock_client() -> AsyncMock:
     """モックの GeminiKeyframeClient を作成する."""
     mock_client = AsyncMock()
     mock_client.analyze_scene.return_value = "A young woman standing at the entrance"
 
-    async def mock_generate_keyframe(char_image, env_image, flash_prompt, reference_image=None, output_path=None):
+    async def mock_generate_keyframe(
+        char_images, env_image, flash_prompt, reference_images=None, reference_infos=None, output_path=None
+    ):
         if output_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(b"fake-keyframe")
@@ -201,17 +244,18 @@ class TestGenerateKeyframes:
         assert result.keyframes[2].scene_number == 2
 
     @pytest.mark.asyncio
-    async def test_generate_keyframes_identity_blockが渡される(
+    async def test_generate_keyframes_identity_blocksリストが渡される(
         self, sample_scenario: Scenario, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
     ) -> None:
-        """analyze_scene に identity_block が渡される."""
+        """analyze_scene に identity_blocks リストが渡される."""
         mock_client = _make_mock_client()
         engine = GeminiKeyframeEngine.from_components(client=mock_client)
         output_dir = tmp_path / "assets" / "keyframes"
         await engine.generate_keyframes(sample_scenario, sample_storyboard, sample_assets, output_dir)
 
         for call in mock_client.analyze_scene.call_args_list:
-            assert call.kwargs["identity_block"] == "Young adult female, dark brown hair"
+            assert call.kwargs["identity_blocks"] == ["Young adult female, dark brown hair"]
+            assert call.kwargs["char_images"] == [sample_assets.characters[0].front_view]
 
     @pytest.mark.asyncio
     async def test_generate_keyframes_キャラクター不在_ValueError(
@@ -224,6 +268,141 @@ class TestGenerateKeyframes:
 
         with pytest.raises(ValueError, match="キャラクターアセット"):
             await engine.generate_keyframes(sample_scenario, sample_storyboard, empty_assets, tmp_path / "keyframes")
+
+    @pytest.mark.asyncio
+    async def test_generate_keyframes_複数キャラクター(
+        self,
+        sample_scenario: Scenario,
+        sample_storyboard: Storyboard,
+        multi_char_assets: AssetSet,
+        tmp_path: Path,
+    ) -> None:
+        """複数キャラクターのコンポーネントが正しく解決される."""
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
+
+        mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(
+                    scene_number=1,
+                    components=[
+                        CharacterComponent(character="Aoi"),
+                        CharacterComponent(character="Saki"),
+                    ],
+                ),
+            ]
+        )
+
+        output_dir = tmp_path / "assets" / "keyframes"
+        await engine.generate_keyframes(
+            sample_scenario, sample_storyboard, multi_char_assets, output_dir, keyframe_mapping=mapping
+        )
+
+        # scene_number=1 のカットでは2キャラクターが渡される
+        scene1_calls = [
+            c for c in mock_client.analyze_scene.call_args_list if len(c.kwargs["char_images"]) == 2
+        ]
+        assert len(scene1_calls) == 2  # scene 1 has 2 cuts
+        for call in scene1_calls:
+            assert len(call.kwargs["identity_blocks"]) == 2
+            assert call.kwargs["identity_blocks"][0] == "Young adult female, dark brown hair"
+            assert call.kwargs["identity_blocks"][1] == "Young adult female, blonde hair"
+
+    @pytest.mark.asyncio
+    async def test_generate_keyframes_キャラクターと参照コンポーネント混在(
+        self,
+        sample_scenario: Scenario,
+        sample_storyboard: Storyboard,
+        sample_assets: AssetSet,
+        tmp_path: Path,
+    ) -> None:
+        """キャラクター + 参照コンポーネントが混在するマッピング."""
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
+
+        ref_img = tmp_path / "ref" / "latte.png"
+        ref_img.parent.mkdir(parents=True)
+        ref_img.write_bytes(b"fake-ref")
+
+        mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(
+                    scene_number=2,
+                    components=[
+                        CharacterComponent(character="Aoi"),
+                        ReferenceComponent(image=ref_img, text="ラテカップ"),
+                    ],
+                ),
+            ]
+        )
+
+        output_dir = tmp_path / "assets" / "keyframes"
+        await engine.generate_keyframes(
+            sample_scenario, sample_storyboard, sample_assets, output_dir, keyframe_mapping=mapping
+        )
+
+        # scene_number=2 のカットで参照が渡される
+        scene2_calls = [
+            c for c in mock_client.analyze_scene.call_args_list
+            if c.kwargs.get("reference_images") and len(c.kwargs["reference_images"]) > 0
+        ]
+        assert len(scene2_calls) == 2  # scene 2 has 2 cuts
+        for call in scene2_calls:
+            assert call.kwargs["reference_images"] == [ref_img]
+            infos = call.kwargs["reference_infos"]
+            assert len(infos) == 1
+            assert infos[0].text == "ラテカップ"
+            assert infos[0].purpose == "general"
+            assert infos[0].has_image is True
+
+
+    @pytest.mark.asyncio
+    async def test_generate_keyframes_purpose付き参照コンポーネント(
+        self,
+        sample_scenario: Scenario,
+        sample_storyboard: Storyboard,
+        sample_assets: AssetSet,
+        tmp_path: Path,
+    ) -> None:
+        """purpose を指定した参照コンポーネントが reference_infos に正しく伝搬される."""
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
+
+        ref_img = tmp_path / "ref" / "mask.png"
+        ref_img.parent.mkdir(parents=True)
+        ref_img.write_bytes(b"fake-mask")
+
+        mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(
+                    scene_number=2,
+                    components=[
+                        CharacterComponent(character="Aoi"),
+                        ReferenceComponent(
+                            image=ref_img, text="フルフェイスマスク", purpose=ReferencePurpose.WEARING
+                        ),
+                    ],
+                ),
+            ]
+        )
+
+        output_dir = tmp_path / "assets" / "keyframes"
+        await engine.generate_keyframes(
+            sample_scenario, sample_storyboard, sample_assets, output_dir, keyframe_mapping=mapping
+        )
+
+        # scene_number=2 のカットで purpose=wearing が渡される
+        scene2_calls = [
+            c for c in mock_client.analyze_scene.call_args_list
+            if c.kwargs.get("reference_infos") and len(c.kwargs["reference_infos"]) > 0
+        ]
+        assert len(scene2_calls) == 2
+        for call in scene2_calls:
+            infos = call.kwargs["reference_infos"]
+            assert len(infos) == 1
+            assert infos[0].purpose == "wearing"
+            assert infos[0].text == "フルフェイスマスク"
+            assert infos[0].has_image is True
 
 
 class TestKeyframeEngineExecute:

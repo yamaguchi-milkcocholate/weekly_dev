@@ -6,8 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daily_routine.keyframe.engine import GeminiKeyframeEngine
+from daily_routine.keyframe.prompt import ReferenceInfo
 from daily_routine.schemas.asset import AssetSet, CharacterAsset, EnvironmentAsset
-from daily_routine.schemas.keyframe_mapping import KeyframeMapping, SceneKeyframeSpec
+from daily_routine.schemas.keyframe_mapping import KeyframeMapping, ReferenceComponent, ReferencePurpose, SceneKeyframeSpec
 from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 from daily_routine.schemas.storyboard import (
     CutSpec,
@@ -120,7 +121,7 @@ def _make_mock_client() -> AsyncMock:
     client.analyze_scene.return_value = "A woman standing in a room"
 
     async def generate_keyframe_side_effect(
-        char_image, env_image, flash_prompt, reference_image=None, output_path=None
+        char_images, env_image, flash_prompt, reference_images=None, reference_infos=None, output_path=None
     ):
         if output_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,12 +192,16 @@ class TestGenerateKeyframes:
         )
 
         assert len(result.keyframes) == 2
-        # scene 1: reference_text が渡される
+        # scene 1: reference_infos が渡される
         call1 = client.analyze_scene.call_args_list[0]
-        assert call1.kwargs["reference_text"] == "Warm room atmosphere"
-        # scene 2: reference_text は空
+        infos1 = call1.kwargs["reference_infos"]
+        assert len(infos1) == 1
+        assert infos1[0].text == "Warm room atmosphere"
+        assert infos1[0].purpose == "general"
+        assert infos1[0].has_image is False
+        # scene 2: reference_infos は空リスト
         call2 = client.analyze_scene.call_args_list[1]
-        assert call2.kwargs["reference_text"] == ""
+        assert call2.kwargs["reference_infos"] == []
 
     @pytest.mark.asyncio
     async def test_environments優先_未登録シーンはNone(self, tmp_path: Path) -> None:
@@ -237,7 +242,7 @@ class TestGenerateKeyframes:
         assert call2.kwargs["env_image"] is None
 
     @pytest.mark.asyncio
-    async def test_identity_blockが渡される(self, tmp_path: Path) -> None:
+    async def test_identity_blocksが渡される(self, tmp_path: Path) -> None:
         output_dir = tmp_path / "keyframes"
         assets = _make_assets(tmp_path)
         scenario = _make_scenario()
@@ -253,7 +258,7 @@ class TestGenerateKeyframes:
         )
 
         for call in client.analyze_scene.call_args_list:
-            assert call.kwargs["identity_block"] == "Young adult female, dark hair"
+            assert call.kwargs["identity_blocks"] == ["Young adult female, dark hair"]
 
     @pytest.mark.asyncio
     async def test_pose_instructionが渡される(self, tmp_path: Path) -> None:
@@ -324,15 +329,15 @@ class TestGenerateKeyframes:
             keyframe_mapping=keyframe_mapping,
         )
 
-        # scene 1: 花子のキャラ画像と identity_block
+        # scene 1: 花子のキャラ画像と identity_blocks
         call1 = client.analyze_scene.call_args_list[0]
-        assert call1.kwargs["char_image"] == front_1
-        assert call1.kwargs["identity_block"] == "Hanako identity"
+        assert call1.kwargs["char_images"] == [front_1]
+        assert call1.kwargs["identity_blocks"] == ["Hanako identity"]
 
-        # scene 2: 太郎のキャラ画像と identity_block
+        # scene 2: 太郎のキャラ画像と identity_blocks
         call2 = client.analyze_scene.call_args_list[1]
-        assert call2.kwargs["char_image"] == front_2
-        assert call2.kwargs["identity_block"] == "Taro identity"
+        assert call2.kwargs["char_images"] == [front_2]
+        assert call2.kwargs["identity_blocks"] == ["Taro identity"]
 
     @pytest.mark.asyncio
     async def test_マッピングのvariant_idでキャラクターバリアント切替(self, tmp_path: Path) -> None:
@@ -384,13 +389,13 @@ class TestGenerateKeyframes:
 
         # scene 1: pajama バリアント
         call1 = client.analyze_scene.call_args_list[0]
-        assert call1.kwargs["char_image"] == front_pajama
-        assert call1.kwargs["identity_block"] == "Hanako pajama"
+        assert call1.kwargs["char_images"] == [front_pajama]
+        assert call1.kwargs["identity_blocks"] == ["Hanako pajama"]
 
         # scene 2: suit バリアント
         call2 = client.analyze_scene.call_args_list[1]
-        assert call2.kwargs["char_image"] == front_suit
-        assert call2.kwargs["identity_block"] == "Hanako suit"
+        assert call2.kwargs["char_images"] == [front_suit]
+        assert call2.kwargs["identity_blocks"] == ["Hanako suit"]
 
     @pytest.mark.asyncio
     async def test_variant_id未指定_名前のみで最初のバリアント(self, tmp_path: Path) -> None:
@@ -442,7 +447,7 @@ class TestGenerateKeyframes:
 
         # scene 1: 最初のバリアント（pajama）が使われる
         call1 = client.analyze_scene.call_args_list[0]
-        assert call1.kwargs["char_image"] == front_pajama
+        assert call1.kwargs["char_images"] == [front_pajama]
 
     @pytest.mark.asyncio
     async def test_マッピングのenvironmentで環境切替(self, tmp_path: Path) -> None:
@@ -497,3 +502,45 @@ class TestGenerateKeyframes:
         # scene 2: マッピングで "オフィス" を指定 → env_a（description一致）
         call2 = client.analyze_scene.call_args_list[1]
         assert call2.kwargs["env_image"] == env_a
+
+    @pytest.mark.asyncio
+    async def test_purpose付き参照がreference_infosに伝搬(self, tmp_path: Path) -> None:
+        """purpose を指定した ReferenceComponent が reference_infos に正しく変換される."""
+        output_dir = tmp_path / "keyframes"
+        ref_img = tmp_path / "mask.png"
+        ref_img.write_bytes(b"mask_image")
+        assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(
+                    scene_number=1,
+                    components=[
+                        ReferenceComponent(image=ref_img, text="フルフェイスマスク", purpose=ReferencePurpose.WEARING),
+                        ReferenceComponent(text="暗い雰囲気", purpose=ReferencePurpose.ATMOSPHERE),
+                    ],
+                ),
+            ]
+        )
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+            keyframe_mapping=keyframe_mapping,
+        )
+
+        call1 = client.analyze_scene.call_args_list[0]
+        infos = call1.kwargs["reference_infos"]
+        assert len(infos) == 2
+        assert infos[0].purpose == "wearing"
+        assert infos[0].text == "フルフェイスマスク"
+        assert infos[0].has_image is True
+        assert infos[1].purpose == "atmosphere"
+        assert infos[1].text == "暗い雰囲気"
+        assert infos[1].has_image is False

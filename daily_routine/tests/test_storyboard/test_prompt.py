@@ -19,7 +19,7 @@ def _make_scenario() -> Scenario:
                 name="Aoi",
                 appearance="25-year-old Japanese woman",
                 outfit="white blouse, navy skirt",
-                reference_prompt="A 25-year-old Japanese woman, full body, white background",
+                reference_prompt="A 25-year-old Japanese woman, full body, green chroma key background",
             )
         ],
         scenes=[
