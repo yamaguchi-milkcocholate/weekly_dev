@@ -17,7 +17,6 @@ from daily_routine.schemas.intelligence import (
 from daily_routine.schemas.scenario import (
     CameraWork,
     CharacterSpec,
-    PropSpec,
     Scenario,
     SceneSpec,
 )
@@ -43,7 +42,6 @@ def _make_trend_report() -> TrendReport:
         ),
         visual_trend=VisualTrend(
             situations=["朝の目覚め"],
-            props=["スマートフォン"],
             camera_works=["POV"],
             color_tones=["warm filter"],
         ),
@@ -55,7 +53,6 @@ def _make_trend_report() -> TrendReport:
         ),
         asset_requirements=AssetRequirement(
             characters=["OL（主人公）"],
-            props=["スマートフォン"],
             backgrounds=["ベッドルーム"],
         ),
     )
@@ -72,13 +69,6 @@ def _make_scenario(total_duration_sec: float = 45.0) -> Scenario:
                 appearance="25-year-old Japanese woman",
                 outfit="white blouse, navy skirt",
                 reference_prompt="A 25-year-old Japanese woman, full body, white background",
-            )
-        ],
-        props=[
-            PropSpec(
-                name="スマートフォン",
-                description="主人公が使用するスマホ",
-                image_prompt="A modern smartphone, white background",
             )
         ],
         scenes=[

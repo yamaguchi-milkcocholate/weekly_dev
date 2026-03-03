@@ -5,8 +5,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daily_routine.keyframe.engine import RunwayKeyframeEngine, _resolve_style_reference
-from daily_routine.schemas.asset import AssetSet, BackgroundAsset, CharacterAsset, PropAsset
+from daily_routine.keyframe.engine import GeminiKeyframeEngine
+from daily_routine.schemas.asset import AssetSet, CharacterAsset, EnvironmentAsset
+from daily_routine.schemas.keyframe_mapping import KeyframeMapping, SceneKeyframeSpec
+from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 from daily_routine.schemas.storyboard import (
     CutSpec,
     MotionIntensity,
@@ -14,8 +16,40 @@ from daily_routine.schemas.storyboard import (
     Storyboard,
     Transition,
 )
-from daily_routine.schemas.style_mapping import SceneStyleReference, StyleMapping
-from daily_routine.visual.clients.gen4_image import ImageGenerationRequest, ImageGenerationResult
+
+
+def _make_scenario() -> Scenario:
+    return Scenario(
+        title="テスト動画",
+        total_duration_sec=6.0,
+        characters=[
+            CharacterSpec(
+                name="花子",
+                appearance="20代女性",
+                outfit="白ブラウス",
+                reference_prompt="A young Japanese woman",
+            )
+        ],
+        scenes=[
+            SceneSpec(
+                scene_number=1,
+                duration_sec=3.0,
+                situation="部屋にいる",
+                camera_work=CameraWork(type="close-up", description="クローズアップ"),
+                caption_text="テスト",
+                image_prompt="A room",
+            ),
+            SceneSpec(
+                scene_number=2,
+                duration_sec=3.0,
+                situation="カフェにいる",
+                camera_work=CameraWork(type="wide", description="ワイド"),
+                caption_text="テスト2",
+                image_prompt="A cafe",
+            ),
+        ],
+        bgm_direction="明るいポップス",
+    )
 
 
 def _make_storyboard() -> Storyboard:
@@ -39,6 +73,7 @@ def _make_storyboard() -> Storyboard:
                         motion_prompt="@char moves slowly",
                         keyframe_prompt="@char in a room",
                         transition=Transition.CUT,
+                        pose_instruction="standing calmly",
                     ),
                 ],
             ),
@@ -74,16 +109,7 @@ def _make_assets(tmp_path: Path) -> AssetSet:
                 front_view=front_view,
                 side_view=tmp_path / "side.png",
                 back_view=tmp_path / "back.png",
-            ),
-        ],
-        props=[
-            PropAsset(name="スマホ", image_path=tmp_path / "smartphone.png"),
-        ],
-        backgrounds=[
-            BackgroundAsset(
-                scene_number=1,
-                description="テスト背景",
-                image_path=tmp_path / "bg.png",
+                identity_block="Young adult female, dark hair",
             ),
         ],
     )
@@ -91,24 +117,24 @@ def _make_assets(tmp_path: Path) -> AssetSet:
 
 def _make_mock_client() -> AsyncMock:
     client = AsyncMock()
+    client.analyze_scene.return_value = "A woman standing in a room"
 
-    async def generate_side_effect(request: ImageGenerationRequest, output_path: Path) -> ImageGenerationResult:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(b"generated_image")
-        return ImageGenerationResult(
-            image_path=output_path,
-            model_name="gen4_image_turbo",
-            cost_usd=0.02,
-        )
+    async def generate_keyframe_side_effect(
+        char_image, env_image, flash_prompt, reference_image=None, output_path=None
+    ):
+        if output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"generated_image")
+        return output_path
 
-    client.generate = AsyncMock(side_effect=generate_side_effect)
+    client.generate_keyframe.side_effect = generate_keyframe_side_effect
     return client
 
 
-def _make_engine(client: AsyncMock) -> RunwayKeyframeEngine:
+def _make_engine(client: AsyncMock) -> GeminiKeyframeEngine:
     """テスト用にエンジンインスタンスを作成する."""
-    engine = RunwayKeyframeEngine(api_key="", gcs_bucket="")
-    engine._image_client = client
+    engine = GeminiKeyframeEngine(api_key="")
+    engine._client = client
     return engine
 
 
@@ -116,122 +142,358 @@ class TestGenerateKeyframes:
     """generate_keyframes のテスト."""
 
     @pytest.mark.asyncio
-    async def test_スタイルマッピングなし_charのみで生成(self, tmp_path: Path) -> None:
+    async def test_マッピングなし_2カット生成(self, tmp_path: Path) -> None:
         output_dir = tmp_path / "keyframes"
         assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
         storyboard = _make_storyboard()
         client = _make_mock_client()
         engine = _make_engine(client)
 
         result = await engine.generate_keyframes(
+            scenario=scenario,
             storyboard=storyboard,
             assets=assets,
             output_dir=output_dir,
         )
 
         assert len(result.keyframes) == 2
-        # 2回呼ばれたことを確認
-        assert client.generate.call_count == 2
-        # 各呼び出しで reference_images が char のみ
-        for call in client.generate.call_args_list:
-            request = call.args[0]
-            assert "char" in request.reference_images
-            assert "location" not in request.reference_images
+        assert client.analyze_scene.call_count == 2
+        assert client.generate_keyframe.call_count == 2
+        assert result.keyframes[0].cut_id == "scene_01_cut_01"
+        assert result.keyframes[0].generation_method == "gemini"
+        assert result.keyframes[1].cut_id == "scene_02_cut_01"
 
     @pytest.mark.asyncio
-    async def test_スタイルマッピングあり_locationが追加(self, tmp_path: Path) -> None:
+    async def test_マッピングあり_reference_textが渡される(self, tmp_path: Path) -> None:
         output_dir = tmp_path / "keyframes"
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
         assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
         storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
 
-        # スタイル参照画像を作成
-        ref_image = project_dir / "assets" / "reference" / "cafe.png"
-        ref_image.parent.mkdir(parents=True)
-        ref_image.write_bytes(b"style_reference")
-
-        style_mapping = StyleMapping(
-            mappings=[
-                SceneStyleReference(scene_number=1, reference=Path("assets/reference/cafe.png")),
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(
+                    scene_number=1,
+                    reference_text="Warm room atmosphere",
+                ),
             ]
         )
 
-        client = _make_mock_client()
-        engine = _make_engine(client)
-
         result = await engine.generate_keyframes(
+            scenario=scenario,
             storyboard=storyboard,
             assets=assets,
             output_dir=output_dir,
-            style_mapping=style_mapping,
-            project_dir=project_dir,
+            keyframe_mapping=keyframe_mapping,
         )
 
         assert len(result.keyframes) == 2
-        assert client.generate.call_count == 2
-
-        # scene 1: char + location
-        req_scene1 = client.generate.call_args_list[0].args[0]
-        assert "char" in req_scene1.reference_images
-        assert "location" in req_scene1.reference_images
-
-        # scene 2: char のみ（マッピングなし）
-        req_scene2 = client.generate.call_args_list[1].args[0]
-        assert "char" in req_scene2.reference_images
-        assert "location" not in req_scene2.reference_images
+        # scene 1: reference_text が渡される
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["reference_text"] == "Warm room atmosphere"
+        # scene 2: reference_text は空
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["reference_text"] == ""
 
     @pytest.mark.asyncio
-    async def test_スタイル参照画像が存在しない_警告のみで生成継続(self, tmp_path: Path) -> None:
+    async def test_environments優先_未登録シーンはNone(self, tmp_path: Path) -> None:
         output_dir = tmp_path / "keyframes"
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        assets = _make_assets(tmp_path)
-        storyboard = _make_storyboard()
+        env_image = tmp_path / "env_1.png"
+        env_image.write_bytes(b"env_image")
 
-        # 参照画像ファイルは作成しない
-        style_mapping = StyleMapping(
-            mappings=[
-                SceneStyleReference(scene_number=1, reference=Path("assets/reference/missing.png")),
+        assets = _make_assets(tmp_path)
+        assets = assets.model_copy(
+            update={
+                "environments": [
+                    EnvironmentAsset(
+                        scene_number=1,
+                        image_path=env_image,
+                    ),
+                ],
+            }
+        )
+
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        # scene 1: environments の画像が渡される
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["env_image"] == env_image
+
+        # scene 2: 該当する environments がないので None
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["env_image"] is None
+
+    @pytest.mark.asyncio
+    async def test_identity_blockが渡される(self, tmp_path: Path) -> None:
+        output_dir = tmp_path / "keyframes"
+        assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        for call in client.analyze_scene.call_args_list:
+            assert call.kwargs["identity_block"] == "Young adult female, dark hair"
+
+    @pytest.mark.asyncio
+    async def test_pose_instructionが渡される(self, tmp_path: Path) -> None:
+        output_dir = tmp_path / "keyframes"
+        assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        # scene 1 cut 1: pose_instruction = "standing calmly"
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["pose_instruction"] == "standing calmly"
+
+        # scene 2 cut 1: pose_instruction = "" (未設定)
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["pose_instruction"] == ""
+
+    @pytest.mark.asyncio
+    async def test_マッピングのcharacterでキャラクター切替(self, tmp_path: Path) -> None:
+        output_dir = tmp_path / "keyframes"
+        front_1 = tmp_path / "front_1.png"
+        front_1.write_bytes(b"char1")
+        front_2 = tmp_path / "front_2.png"
+        front_2.write_bytes(b"char2")
+        assets = AssetSet(
+            characters=[
+                CharacterAsset(
+                    character_name="花子",
+                    front_view=front_1,
+                    side_view=tmp_path / "side1.png",
+                    back_view=tmp_path / "back1.png",
+                    identity_block="Hanako identity",
+                ),
+                CharacterAsset(
+                    character_name="太郎",
+                    front_view=front_2,
+                    side_view=tmp_path / "side2.png",
+                    back_view=tmp_path / "back2.png",
+                    identity_block="Taro identity",
+                ),
+            ],
+        )
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(scene_number=1, character="花子"),
+                SceneKeyframeSpec(scene_number=2, character="太郎"),
             ]
         )
 
-        client = _make_mock_client()
-        engine = _make_engine(client)
-
-        result = await engine.generate_keyframes(
+        await engine.generate_keyframes(
+            scenario=scenario,
             storyboard=storyboard,
             assets=assets,
             output_dir=output_dir,
-            style_mapping=style_mapping,
-            project_dir=project_dir,
+            keyframe_mapping=keyframe_mapping,
         )
 
-        assert len(result.keyframes) == 2
-        # ファイルが存在しないので location は追加されない
-        req_scene1 = client.generate.call_args_list[0].args[0]
-        assert "location" not in req_scene1.reference_images
+        # scene 1: 花子のキャラ画像と identity_block
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["char_image"] == front_1
+        assert call1.kwargs["identity_block"] == "Hanako identity"
 
+        # scene 2: 太郎のキャラ画像と identity_block
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["char_image"] == front_2
+        assert call2.kwargs["identity_block"] == "Taro identity"
 
-class TestResolveStyleReference:
-    """_resolve_style_reference のテスト."""
+    @pytest.mark.asyncio
+    async def test_マッピングのvariant_idでキャラクターバリアント切替(self, tmp_path: Path) -> None:
+        """variant_id を指定して同一キャラクターの衣装バリアントを切替."""
+        output_dir = tmp_path / "keyframes"
+        front_pajama = tmp_path / "front_pajama.png"
+        front_pajama.write_bytes(b"pajama")
+        front_suit = tmp_path / "front_suit.png"
+        front_suit.write_bytes(b"suit")
+        assets = AssetSet(
+            characters=[
+                CharacterAsset(
+                    character_name="花子",
+                    variant_id="pajama",
+                    front_view=front_pajama,
+                    side_view=tmp_path / "side_p.png",
+                    back_view=tmp_path / "back_p.png",
+                    identity_block="Hanako pajama",
+                ),
+                CharacterAsset(
+                    character_name="花子",
+                    variant_id="suit",
+                    front_view=front_suit,
+                    side_view=tmp_path / "side_s.png",
+                    back_view=tmp_path / "back_s.png",
+                    identity_block="Hanako suit",
+                ),
+            ],
+        )
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
 
-    def test_絶対パス_そのまま返す(self, tmp_path: Path) -> None:
-        abs_path = tmp_path / "absolute" / "image.png"
-        result = _resolve_style_reference(abs_path, tmp_path / "project")
-        assert result == abs_path
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(scene_number=1, character="花子", variant_id="pajama"),
+                SceneKeyframeSpec(scene_number=2, character="花子", variant_id="suit"),
+            ]
+        )
 
-    def test_seedsパス_リポジトリルートから解決(self, tmp_path: Path) -> None:
-        # project_dir = repo_root/outputs/projects/test-id
-        project_dir = tmp_path / "outputs" / "projects" / "test-id"
-        project_dir.mkdir(parents=True)
-        path = Path("seeds/captures/abc/7.png")
-        result = _resolve_style_reference(path, project_dir)
-        assert result == tmp_path / "seeds" / "captures" / "abc" / "7.png"
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+            keyframe_mapping=keyframe_mapping,
+        )
 
-    def test_相対パス_プロジェクトディレクトリから解決(self, tmp_path: Path) -> None:
-        project_dir = tmp_path / "outputs" / "projects" / "test-id"
-        project_dir.mkdir(parents=True)
-        path = Path("assets/reference/cafe.png")
-        result = _resolve_style_reference(path, project_dir)
-        assert result == project_dir / "assets" / "reference" / "cafe.png"
+        # scene 1: pajama バリアント
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["char_image"] == front_pajama
+        assert call1.kwargs["identity_block"] == "Hanako pajama"
+
+        # scene 2: suit バリアント
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["char_image"] == front_suit
+        assert call2.kwargs["identity_block"] == "Hanako suit"
+
+    @pytest.mark.asyncio
+    async def test_variant_id未指定_名前のみで最初のバリアント(self, tmp_path: Path) -> None:
+        """variant_id 未指定時は character_name で最初に見つかったバリアントを使用."""
+        output_dir = tmp_path / "keyframes"
+        front_pajama = tmp_path / "front_pajama.png"
+        front_pajama.write_bytes(b"pajama")
+        front_suit = tmp_path / "front_suit.png"
+        front_suit.write_bytes(b"suit")
+        assets = AssetSet(
+            characters=[
+                CharacterAsset(
+                    character_name="花子",
+                    variant_id="pajama",
+                    front_view=front_pajama,
+                    side_view=tmp_path / "side_p.png",
+                    back_view=tmp_path / "back_p.png",
+                    identity_block="Hanako pajama",
+                ),
+                CharacterAsset(
+                    character_name="花子",
+                    variant_id="suit",
+                    front_view=front_suit,
+                    side_view=tmp_path / "side_s.png",
+                    back_view=tmp_path / "back_s.png",
+                    identity_block="Hanako suit",
+                ),
+            ],
+        )
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        # variant_id を指定しない
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(scene_number=1, character="花子"),
+            ]
+        )
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+            keyframe_mapping=keyframe_mapping,
+        )
+
+        # scene 1: 最初のバリアント（pajama）が使われる
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["char_image"] == front_pajama
+
+    @pytest.mark.asyncio
+    async def test_マッピングのenvironmentで環境切替(self, tmp_path: Path) -> None:
+        output_dir = tmp_path / "keyframes"
+        env_a = tmp_path / "env_a.png"
+        env_a.write_bytes(b"env_a")
+        env_b = tmp_path / "env_b.png"
+        env_b.write_bytes(b"env_b")
+
+        assets = _make_assets(tmp_path)
+        assets = assets.model_copy(
+            update={
+                "environments": [
+                    EnvironmentAsset(
+                        scene_number=1,
+                        description="オフィス",
+                        image_path=env_a,
+                    ),
+                    EnvironmentAsset(
+                        scene_number=2,
+                        description="カフェ",
+                        image_path=env_b,
+                    ),
+                ],
+            }
+        )
+
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        # scene 2 にオフィス環境を上書き指定
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(scene_number=2, environment="オフィス"),
+            ]
+        )
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+            keyframe_mapping=keyframe_mapping,
+        )
+
+        # scene 1: マッピングなし → scene_number=1 の環境（env_a）
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["env_image"] == env_a
+
+        # scene 2: マッピングで "オフィス" を指定 → env_a（description一致）
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["env_image"] == env_a

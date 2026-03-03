@@ -50,7 +50,6 @@ class ScenarioPromptBuilder:
 
 ### 映像トレンド
 - シチュエーション: {", ".join(vt.situations)}
-- 登場小物: {", ".join(vt.props)}
 - カメラワーク: {", ".join(vt.camera_works)}
 - 色調: {", ".join(vt.color_tones)}
 
@@ -62,7 +61,6 @@ class ScenarioPromptBuilder:
 
 ### 素材要件
 - キャラクター: {", ".join(ar.characters)}
-- 小物: {", ".join(ar.props)}
 - 背景: {", ".join(ar.backgrounds)}
 
 ## シナリオ生成ルール
@@ -80,13 +78,7 @@ class ScenarioPromptBuilder:
 白背景、スタジオライティング、全身立ちポーズを含む。\
 このプロンプトは正面画像の起点用であり、横・背面・表情バリエーションは別途派生させる
 
-### 3. 小物仕様（props）
-- asset_requirements.props からリストを導出し、各小物の詳細説明と画像生成プロンプトを付与
-- name: 小物名（日本語）
-- description: 小物の詳細説明（日本語）。シナリオ内での用途・特徴を含む
-- image_prompt: Asset Generator 向け小物画像生成プロンプト（英語）。白背景、スタジオライティング、商品撮影風
-
-### 4. シーン仕様（scenes）
+### 3. シーン仕様（scenes）
 - scene_number: 1始まりの連番
 - duration_sec: トレンド分析の avg_scene_duration_sec を参考に配分。合計が total_duration_sec と一致するようにする
 - situation: シーンの状況を具体的に説明（日本語）
@@ -95,12 +87,12 @@ class ScenarioPromptBuilder:
 - image_prompt: Asset Generator 向け背景画像生成プロンプト（英語）。\
 キャラクター不在、背景のみ。色調はトレンドの color_tones を反映
 
-### 5. BGM方向性（bgm_direction）
+### 4. BGM方向性（bgm_direction）
 - トレンド分析の audio_trend（BPM帯、ジャンル）を反映した自然言語の指示（日本語）
 
-### 6. プロンプト言語ルール
+### 5. プロンプト言語ルール
 - 英語で書くフィールド: image_prompt, reference_prompt, appearance, outfit
-- 日本語で書くフィールド: title, situation, caption_text, bgm_direction, PropSpec.name, PropSpec.description"""
+- 日本語で書くフィールド: title, situation, caption_text, bgm_direction"""
 
     def build_user_prompt(
         self,

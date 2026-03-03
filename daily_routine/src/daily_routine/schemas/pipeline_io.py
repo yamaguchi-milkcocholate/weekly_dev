@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 from daily_routine.intelligence.base import SeedVideo
 from daily_routine.schemas.audio import AudioAsset
 from daily_routine.schemas.intelligence import AudioTrend
+from daily_routine.schemas.keyframe_mapping import KeyframeMapping
 from daily_routine.schemas.scenario import Scenario
 from daily_routine.schemas.storyboard import Storyboard
-from daily_routine.schemas.style_mapping import StyleMapping
 from daily_routine.schemas.visual import VideoClipSet
 
 
@@ -35,7 +35,7 @@ class KeyframeInput(BaseModel):
     scenario: Scenario
     storyboard: Storyboard
     assets: "AssetSet"
-    style_mapping: StyleMapping | None = None
+    keyframe_mapping: KeyframeMapping | None = None
 
 
 class VisualInput(BaseModel):
@@ -57,6 +57,7 @@ class PostProductionInput(BaseModel):
     """Post-Production のパイプライン入力（複合）."""
 
     scenario: Scenario
+    storyboard: Storyboard
     video_clips: VideoClipSet
     audio_asset: AudioAsset
 

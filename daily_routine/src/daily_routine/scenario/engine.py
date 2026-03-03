@@ -48,7 +48,7 @@ class OpenAIScenarioEngine(StepEngine[TrendReport, Scenario], ScenarioEngineBase
         self,
         trend_report: TrendReport,
         output_dir: Path,
-        duration_range: tuple[int, int] = (30, 60),
+        duration_range: tuple[int, int] = (15, 60),
         user_direction: str | None = None,
     ) -> Scenario:
         """TrendReport からシナリオを生成する.

@@ -36,6 +36,7 @@ class CutSpec(BaseModel):
     motion_prompt: str = Field(description="動画生成プロンプト（英語、Subject Motion + Scene Motion + Camera Motion）")
     keyframe_prompt: str = Field(description="キーフレーム画像プロンプト（英語、@char タグでキャラクター参照）")
     transition: Transition = Field(default=Transition.CUT, description="次のカットへのトランジション種別")
+    pose_instruction: str = Field(default="", description="ポーズ指示（C3-I1 Flash分析入力）")
 
 
 class SceneStoryboard(BaseModel):

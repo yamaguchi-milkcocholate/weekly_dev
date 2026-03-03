@@ -9,13 +9,13 @@ from daily_routine.pipeline.base import StepEngine
 from daily_routine.pipeline.exceptions import InvalidStateError, StepExecutionError
 from daily_routine.pipeline.registry import create_engine
 from daily_routine.pipeline.state import initialize_state, load_state, save_state
+from daily_routine.schemas.keyframe_mapping import KeyframeMapping
 from daily_routine.schemas.pipeline_io import IntelligenceInput
 from daily_routine.schemas.project import (
     CheckpointStatus,
     PipelineState,
     PipelineStep,
 )
-from daily_routine.schemas.style_mapping import StyleMapping
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,10 @@ async def resume_pipeline(
         save_state(project_dir, state)
         logger.info("パイプラインが完了しました: %s", state.project_id)
         return state
+
+    # ASSET → KEYFRAME 遷移時に keyframe_mapping.yaml を自動生成
+    if next_step == PipelineStep.KEYFRAME:
+        _auto_generate_keyframe_mapping(project_dir)
 
     # 次のステップを実行
     engine = create_engine(next_step, **_engine_kwargs(next_step, api_keys))
@@ -246,12 +250,12 @@ def _build_input(
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
         storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
         assets = create_engine(PipelineStep.ASSET).load_output(project_dir)
-        style_mapping = _load_style_mapping(project_dir)
+        keyframe_mapping = _load_keyframe_mapping(project_dir)
         return KeyframeInput(
             scenario=scenario,
             storyboard=storyboard,
             assets=assets,
-            style_mapping=style_mapping,
+            keyframe_mapping=keyframe_mapping,
         )
     elif step == PipelineStep.VISUAL:
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
@@ -264,9 +268,10 @@ def _build_input(
         return AudioInput(audio_trend=trend_report.audio_trend, scenario=scenario)
     elif step == PipelineStep.POST_PRODUCTION:
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
+        storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
         clips = create_engine(PipelineStep.VISUAL).load_output(project_dir)
         audio = create_engine(PipelineStep.AUDIO).load_output(project_dir)
-        return PostProductionInput(scenario=scenario, video_clips=clips, audio_asset=audio)
+        return PostProductionInput(scenario=scenario, storyboard=storyboard, video_clips=clips, audio_asset=audio)
 
     msg = f"未知のステップ: {step}"
     raise ValueError(msg)
@@ -329,9 +334,7 @@ def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[
 
     if step == PipelineStep.KEYFRAME:
         return {
-            "api_key": api_keys.get("runway", ""),
-            "gcs_bucket": api_keys.get("gcs_bucket", ""),
-            "image_model": api_keys.get("image_model", "gen4_image_turbo"),
+            "api_key": api_keys.get("google_ai", ""),
         }
 
     if step == PipelineStep.VISUAL:
@@ -350,18 +353,76 @@ def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[
     return {}
 
 
-_STYLE_MAPPING_FILENAME = "style_mapping.yaml"
+_KEYFRAME_MAPPING_FILENAME = "keyframe_mapping.yaml"
 
 
-def _load_style_mapping(project_dir: Path) -> StyleMapping | None:
-    """style_mapping.yaml を読み込む。ファイルが存在しなければ None を返す."""
+def _load_keyframe_mapping(project_dir: Path) -> KeyframeMapping | None:
+    """keyframe_mapping.yaml を読み込む。ファイルが存在しなければ None を返す."""
 
-    mapping_path = project_dir / "storyboard" / _STYLE_MAPPING_FILENAME
+    mapping_path = project_dir / "storyboard" / _KEYFRAME_MAPPING_FILENAME
     if not mapping_path.exists():
-        logger.info("style_mapping.yaml が見つかりません。スタイル参照なしで生成します")
+        logger.info("keyframe_mapping.yaml が見つかりません。マッピングなしで生成します")
         return None
 
     import yaml
 
     data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
-    return StyleMapping.model_validate(data)
+    return KeyframeMapping.model_validate(data)
+
+
+def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
+    """Storyboard + AssetSet から keyframe_mapping.yaml を自動生成する.
+
+    既存ファイルがあれば上書きしない（ユーザー編集を保護）。
+    """
+    import yaml
+
+    from daily_routine.schemas.keyframe_mapping import SceneKeyframeSpec
+
+    mapping_path = project_dir / "storyboard" / _KEYFRAME_MAPPING_FILENAME
+    if mapping_path.exists():
+        return
+
+    try:
+        storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
+        assets = create_engine(PipelineStep.ASSET).load_output(project_dir)
+    except (FileNotFoundError, KeyError):
+        logger.warning("Storyboard または AssetSet が見つからないため、keyframe_mapping の自動生成をスキップします")
+        return
+
+    scenes: list[dict] = []
+    seen_scene_numbers: set[int] = set()
+
+    for scene in storyboard.scenes:
+        if scene.scene_number in seen_scene_numbers:
+            continue
+        seen_scene_numbers.add(scene.scene_number)
+
+        character = assets.characters[0].character_name if assets.characters else ""
+        variant_id = assets.characters[0].variant_id if assets.characters else ""
+        environment = ""
+        for env in assets.environments:
+            if env.scene_number == scene.scene_number:
+                environment = env.description
+                break
+        pose = ""
+        if scene.cuts:
+            pose = scene.cuts[0].pose_instruction
+
+        scenes.append(
+            SceneKeyframeSpec(
+                scene_number=scene.scene_number,
+                character=character,
+                variant_id=variant_id,
+                environment=environment,
+                pose=pose,
+            ).model_dump(mode="json")
+        )
+
+    mapping_data = {"scenes": scenes}
+    mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    mapping_path.write_text(
+        yaml.dump(mapping_data, allow_unicode=True, default_flow_style=False),
+        encoding="utf-8",
+    )
+    logger.info("keyframe_mapping.yaml を自動生成しました: %s", mapping_path)

@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daily_routine.config.manager import ApiKeys, GlobalConfig, RunwayConfig, VisualConfig
-from daily_routine.schemas.asset import AssetSet, BackgroundAsset, CharacterAsset, KeyframeAsset, PropAsset
-from daily_routine.schemas.scenario import CameraWork, CharacterSpec, PropSpec, Scenario, SceneSpec
+from daily_routine.schemas.asset import AssetSet, CharacterAsset, KeyframeAsset
+from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 from daily_routine.schemas.storyboard import (
     CutSpec,
     MotionIntensity,
@@ -32,13 +32,6 @@ def sample_scenario() -> Scenario:
                 appearance="20代女性",
                 outfit="白ブラウス",
                 reference_prompt="A young Japanese woman",
-            )
-        ],
-        props=[
-            PropSpec(
-                name="coffee_cup",
-                description="白いコーヒーカップ",
-                image_prompt="A white coffee cup",
             )
         ],
         scenes=[
@@ -198,16 +191,12 @@ def sample_assets(tmp_path: Path) -> AssetSet:
                 back_view=back,
             )
         ],
-        props=[PropAsset(name="coffee_cup", image_path=tmp_path / "props" / "coffee.png")],
-        backgrounds=[
-            BackgroundAsset(scene_number=1, description="玄関", image_path=tmp_path / "bg" / "s01.png"),
-            BackgroundAsset(scene_number=2, description="カフェ", image_path=tmp_path / "bg" / "s02.png"),
-            BackgroundAsset(scene_number=3, description="オフィス", image_path=tmp_path / "bg" / "s03.png"),
-        ],
         keyframes=[
-            KeyframeAsset(scene_number=1, image_path=kf1, prompt="@char at apartment entrance"),
-            KeyframeAsset(scene_number=2, image_path=kf2, prompt="@char at cafe counter"),
-            KeyframeAsset(scene_number=3, image_path=kf3, prompt="@char at office desk"),
+            KeyframeAsset(
+                scene_number=1, image_path=kf1, prompt="@char at apartment entrance", cut_id="scene_01_cut_01"
+            ),
+            KeyframeAsset(scene_number=2, image_path=kf2, prompt="@char at cafe counter", cut_id="scene_02_cut_01"),
+            KeyframeAsset(scene_number=3, image_path=kf3, prompt="@char at office desk", cut_id="scene_03_cut_01"),
         ],
     )
 

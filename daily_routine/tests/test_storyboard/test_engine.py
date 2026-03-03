@@ -9,7 +9,6 @@ from daily_routine.schemas.pipeline_io import StoryboardInput
 from daily_routine.schemas.scenario import (
     CameraWork,
     CharacterSpec,
-    PropSpec,
     Scenario,
     SceneSpec,
 )
@@ -34,13 +33,6 @@ def _make_scenario() -> Scenario:
                 appearance="25-year-old Japanese woman",
                 outfit="white blouse, navy skirt",
                 reference_prompt="A 25-year-old Japanese woman, full body, white background",
-            )
-        ],
-        props=[
-            PropSpec(
-                name="スマートフォン",
-                description="主人公が使用するスマホ",
-                image_prompt="A modern smartphone, white background",
             )
         ],
         scenes=[

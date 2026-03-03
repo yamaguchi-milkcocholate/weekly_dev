@@ -28,7 +28,7 @@ def _register_engines() -> None:
     from daily_routine.asset.generator import GeminiAssetGenerator
     from daily_routine.audio.engine import AudioEngine
     from daily_routine.intelligence.engine import IntelligenceEngine
-    from daily_routine.keyframe.engine import RunwayKeyframeEngine
+    from daily_routine.keyframe.engine import GeminiKeyframeEngine
     from daily_routine.pipeline.registry import register_engine
     from daily_routine.scenario.engine import OpenAIScenarioEngine
     from daily_routine.schemas.project import PipelineStep
@@ -39,7 +39,7 @@ def _register_engines() -> None:
     register_engine(PipelineStep.SCENARIO, OpenAIScenarioEngine)
     register_engine(PipelineStep.STORYBOARD, OpenAIStoryboardEngine)
     register_engine(PipelineStep.ASSET, GeminiAssetGenerator)
-    register_engine(PipelineStep.KEYFRAME, RunwayKeyframeEngine)
+    register_engine(PipelineStep.KEYFRAME, GeminiKeyframeEngine)
     register_engine(PipelineStep.VISUAL, DefaultVisualEngine)
     register_engine(PipelineStep.AUDIO, AudioEngine)
 

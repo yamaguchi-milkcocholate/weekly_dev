@@ -32,7 +32,6 @@ def _make_scenario() -> Scenario:
         title="OLの一日",
         total_duration_sec=45.0,
         characters=[],
-        props=[],
         scenes=[
             SceneSpec(
                 scene_number=1,

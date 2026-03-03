@@ -31,7 +31,6 @@ def _make_trend_report() -> TrendReport:
         ),
         visual_trend=VisualTrend(
             situations=["朝の目覚め", "メイク", "通勤電車"],
-            props=["スマートフォン", "コーヒーカップ"],
             camera_works=["POV", "close-up", "wide"],
             color_tones=["warm filter", "soft pastel"],
         ),
@@ -43,7 +42,6 @@ def _make_trend_report() -> TrendReport:
         ),
         asset_requirements=AssetRequirement(
             characters=["OL（主人公）"],
-            props=["スマートフォン", "コーヒーカップ"],
             backgrounds=["ベッドルーム", "オフィス"],
         ),
     )

@@ -11,6 +11,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "gemini-3-pro-image-preview"
+_DEFAULT_FLASH_MODEL = "gemini-3-flash-preview"
 
 
 class GeminiImageClient:
@@ -20,14 +21,24 @@ class GeminiImageClient:
     参照画像入力・指数バックオフリトライ・設定管理を追加。
     """
 
-    def __init__(self, api_key: str, model_name: str = _DEFAULT_MODEL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = _DEFAULT_MODEL,
+        flash_model_name: str = _DEFAULT_FLASH_MODEL,
+    ) -> None:
         if not api_key:
             msg = "Gemini API キーが設定されていません"
             raise ValueError(msg)
         self.api_key = api_key
         self.model_name = model_name
+        self.flash_model_name = flash_model_name
         self._llm = ChatGoogleGenerativeAI(
             model=model_name,
+            google_api_key=api_key,
+        )
+        self._flash_llm = ChatGoogleGenerativeAI(
+            model=flash_model_name,
             google_api_key=api_key,
         )
 
@@ -114,6 +125,64 @@ class GeminiImageClient:
         output_path.write_bytes(image_data)
         logger.info("参照画像付き画像生成完了: %s", output_path)
         return output_path
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=2, max=30),
+        retry=retry_if_exception_type((RuntimeError, ConnectionError)),
+        reraise=True,
+    )
+    async def analyze_with_flash(
+        self,
+        prompt: str,
+        images: list[Path],
+        temperature: float = 0.0,
+    ) -> str:
+        """Flash モデルで画像を分析しテキストを返す.
+
+        C1-F2-MA の融合分析や Identity Block 抽出に使用。
+
+        Args:
+            prompt: 分析プロンプト
+            images: 分析対象の画像パスリスト
+            temperature: 生成温度（デフォルト 0.0 で決定的出力）
+
+        Returns:
+            分析結果テキスト
+        """
+        logger.info("Flash 分析を開始 (画像: %d枚)", len(images))
+
+        content: list[dict | str] = []
+        for img_path in images:
+            if not img_path.exists():
+                msg = f"分析対象画像が見つかりません: {img_path}"
+                raise FileNotFoundError(msg)
+            image_bytes = img_path.read_bytes()
+            b64_data = base64.b64encode(image_bytes).decode("utf-8")
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{b64_data}"},
+                }
+            )
+
+        content.append({"type": "text", "text": prompt})
+
+        flash_llm = self._flash_llm
+        if temperature != 0.0:
+            flash_llm = ChatGoogleGenerativeAI(
+                model=self.flash_model_name,
+                google_api_key=self.api_key,
+                temperature=temperature,
+            )
+
+        response = await flash_llm.ainvoke([HumanMessage(content=content)])
+        result = response.content
+        if not isinstance(result, str):
+            result = str(result)
+
+        logger.info("Flash 分析完了 (結果: %d文字)", len(result))
+        return result
 
 
 def _extract_image(response: object) -> bytes | None:

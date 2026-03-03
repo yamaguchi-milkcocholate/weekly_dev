@@ -31,7 +31,6 @@ def _make_sample_trend_report_json() -> str:
   },
   "visual_trend": {
     "situations": ["起床", "通勤"],
-    "props": ["スマホ"],
     "camera_works": ["俯瞰"],
     "color_tones": ["暖色系"]
   },
@@ -43,7 +42,6 @@ def _make_sample_trend_report_json() -> str:
   },
   "asset_requirements": {
     "characters": ["OL"],
-    "props": ["スマホ"],
     "backgrounds": ["オフィス"]
   }
 }"""

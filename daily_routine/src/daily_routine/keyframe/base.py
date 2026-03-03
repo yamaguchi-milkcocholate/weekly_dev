@@ -4,8 +4,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from daily_routine.schemas.asset import AssetSet
+from daily_routine.schemas.keyframe_mapping import KeyframeMapping
+from daily_routine.schemas.scenario import Scenario
 from daily_routine.schemas.storyboard import Storyboard
-from daily_routine.schemas.style_mapping import StyleMapping
 
 
 class KeyframeEngineBase(ABC):
@@ -14,19 +15,21 @@ class KeyframeEngineBase(ABC):
     @abstractmethod
     async def generate_keyframes(
         self,
+        scenario: Scenario,
         storyboard: Storyboard,
         assets: AssetSet,
         output_dir: Path,
-        style_mapping: StyleMapping | None = None,
+        keyframe_mapping: KeyframeMapping | None = None,
         project_dir: Path | None = None,
     ) -> AssetSet:
         """全カットのキーフレーム画像を生成する.
 
         Args:
-            storyboard: 絵コンテ（カット単位の keyframe_prompt を含む）
-            assets: アセットセット（characters[0].front_view を参照画像として使用）
+            scenario: シナリオ
+            storyboard: 絵コンテ（カット単位の情報を含む）
+            assets: アセットセット（characters, environments を参照）
             output_dir: キーフレーム画像の出力ディレクトリ
-            style_mapping: スタイル参照画像のマッピング（任意）
+            keyframe_mapping: キーフレームマッピング（任意）
             project_dir: プロジェクトディレクトリ（パス解決に使用）
 
         Returns:

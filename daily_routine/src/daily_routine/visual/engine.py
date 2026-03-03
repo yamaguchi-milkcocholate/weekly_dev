@@ -86,7 +86,7 @@ class DefaultVisualEngine(StepEngine[VisualInput, VideoClipSet], VisualEngine):
             output_path = output_dir / f"{cut.cut_id}.mp4"
 
             # キーフレーム画像を取得（KEYFRAME ステップで生成済み）
-            keyframe = self._find_keyframe(assets, cut.scene_number)
+            keyframe = self._find_keyframe(assets, cut.cut_id, cut.scene_number)
 
             logger.info("カット %d/%d (%s) の動画生成を開始します", i, total_cuts, cut.cut_id)
 
@@ -156,12 +156,15 @@ class DefaultVisualEngine(StepEngine[VisualInput, VideoClipSet], VisualEngine):
         return result.video_path
 
     @staticmethod
-    def _find_keyframe(assets: AssetSet, scene_number: int) -> KeyframeAsset:
-        """AssetSetからシーン番号に対応するキーフレームを取得する."""
+    def _find_keyframe(assets: AssetSet, cut_id: str, scene_number: int) -> KeyframeAsset:
+        """AssetSetからキーフレームを取得する（cut_id 優先、scene_number フォールバック）."""
+        for kf in assets.keyframes:
+            if kf.cut_id and kf.cut_id == cut_id:
+                return kf
         for kf in assets.keyframes:
             if kf.scene_number == scene_number:
                 return kf
-        msg = f"キーフレーム画像が見つかりません: scene_{scene_number}"
+        msg = f"キーフレーム画像が見つかりません: cut_id={cut_id}, scene_{scene_number}"
         raise FileNotFoundError(msg)
 
     def _save_metadata(self, output_dir: Path, clip_set: VideoClipSet, storyboard: Storyboard) -> None:

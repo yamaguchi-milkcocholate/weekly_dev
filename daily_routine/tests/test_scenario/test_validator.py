@@ -6,7 +6,6 @@ from daily_routine.scenario.validator import ScenarioValidationError, ScenarioVa
 from daily_routine.schemas.scenario import (
     CameraWork,
     CharacterSpec,
-    PropSpec,
     Scenario,
     SceneSpec,
 )
@@ -34,15 +33,6 @@ def _make_character() -> CharacterSpec:
     )
 
 
-def _make_prop() -> PropSpec:
-    """テスト用の小物を作成する."""
-    return PropSpec(
-        name="スマートフォン",
-        description="主人公が使用するスマホ",
-        image_prompt="A modern smartphone, white background",
-    )
-
-
 def _make_scenario(
     total_duration_sec: float = 45.0,
     scenes: list[SceneSpec] | None = None,
@@ -61,7 +51,6 @@ def _make_scenario(
         title="テスト動画",
         total_duration_sec=total_duration_sec,
         characters=characters,
-        props=[_make_prop()],
         scenes=scenes,
         bgm_direction="明るいlo-fi pop、BPM 110〜130",
     )

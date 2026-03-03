@@ -3,8 +3,8 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from daily_routine.schemas.asset import AssetSet, BackgroundAsset, CharacterAsset, PropAsset
-from daily_routine.schemas.scenario import CharacterSpec, PropSpec, SceneSpec
+from daily_routine.schemas.asset import AssetSet, CharacterAsset
+from daily_routine.schemas.scenario import CharacterSpec, SceneSpec
 
 
 class AssetGenerator(ABC):
@@ -14,19 +14,21 @@ class AssetGenerator(ABC):
     async def generate_assets(
         self,
         characters: list[CharacterSpec],
-        props: list[PropSpec],
         scenes: list[SceneSpec],
         output_dir: Path,
         user_reference_images: dict[str, Path] | None = None,
+        person_images: dict[str, Path] | None = None,
+        clothing_images: dict[str, Path] | None = None,
     ) -> AssetSet:
         """シナリオ仕様に基づき全アセットを生成する.
 
         Args:
             characters: キャラクター仕様リスト
-            props: 小物仕様リスト（名前・説明・画像生成プロンプトを含む）
             scenes: シーン仕様リスト
             output_dir: 出力ディレクトリ
             user_reference_images: ユーザー指定の参照画像 {キャラクター名: 画像パス}
+            person_images: 人物参照画像 {キャラクター名: 画像パス}
+            clothing_images: 服装参照画像 {キャラクター名: 画像パス}
         """
         ...
 
@@ -36,6 +38,9 @@ class AssetGenerator(ABC):
         character: CharacterSpec,
         output_dir: Path,
         reference_image: Path | None = None,
+        person_image: Path | None = None,
+        clothing_image: Path | None = None,
+        variant_id: str = "default",
     ) -> CharacterAsset:
         """1キャラクターのリファレンス画像セットを生成する.
 
@@ -43,24 +48,8 @@ class AssetGenerator(ABC):
             character: キャラクター仕様
             output_dir: 出力ディレクトリ
             reference_image: ユーザー指定の参照画像（省略時はプロンプトのみで生成）
+            person_image: 人物参照画像（C1-F2-MA 用）
+            clothing_image: 服装参照画像（C1-F2-MA 用）
+            variant_id: 衣装バリアントID
         """
-        ...
-
-    @abstractmethod
-    async def generate_prop(
-        self,
-        name: str,
-        description: str,
-        output_dir: Path,
-    ) -> PropAsset:
-        """小物の画像を生成する."""
-        ...
-
-    @abstractmethod
-    async def generate_background(
-        self,
-        scene: SceneSpec,
-        output_dir: Path,
-    ) -> BackgroundAsset:
-        """シーンの背景画像を生成する."""
         ...

@@ -1,12 +1,12 @@
-"""RunwayKeyframeEngine のモックテスト."""
+"""GeminiKeyframeEngine のモックテスト."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
-from daily_routine.keyframe.engine import RunwayKeyframeEngine
-from daily_routine.schemas.asset import AssetSet, BackgroundAsset, CharacterAsset, KeyframeAsset, PropAsset
+from daily_routine.keyframe.engine import GeminiKeyframeEngine
+from daily_routine.schemas.asset import AssetSet, CharacterAsset, KeyframeAsset
 from daily_routine.schemas.pipeline_io import KeyframeInput
 from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 from daily_routine.schemas.storyboard import (
@@ -16,7 +16,6 @@ from daily_routine.schemas.storyboard import (
     Storyboard,
     Transition,
 )
-from daily_routine.visual.clients.gen4_image import ImageGenerationResult, RunwayImageClient
 
 
 @pytest.fixture
@@ -33,7 +32,6 @@ def sample_scenario() -> Scenario:
                 reference_prompt="A young Japanese woman",
             )
         ],
-        props=[],
         scenes=[
             SceneSpec(
                 scene_number=1,
@@ -79,6 +77,7 @@ def sample_storyboard() -> Storyboard:
                         motion_prompt="She opens the door and steps out",
                         keyframe_prompt="@char walks out of a modern apartment entrance, morning light",
                         transition=Transition.FADE_IN,
+                        pose_instruction="standing at doorway",
                     ),
                     CutSpec(
                         cut_id="scene_01_cut_02",
@@ -90,6 +89,7 @@ def sample_storyboard() -> Storyboard:
                         action_description="歩き出す",
                         motion_prompt="She walks forward confidently",
                         keyframe_prompt="@char walks on a residential street, morning sunlight",
+                        pose_instruction="walking forward",
                     ),
                 ],
             ),
@@ -141,63 +141,53 @@ def sample_assets(tmp_path: Path) -> AssetSet:
                 front_view=front,
                 side_view=char_dir / "side.png",
                 back_view=char_dir / "back.png",
+                identity_block="Young adult female, dark brown hair",
             )
         ],
-        props=[],
-        backgrounds=[],
     )
 
 
-def _make_mock_image_result(output_path: Path) -> ImageGenerationResult:
-    """モックの ImageGenerationResult を作成する."""
-    return ImageGenerationResult(
-        image_path=output_path,
-        model_name="gen4_image_turbo",
-        cost_usd=0.02,
-    )
+def _make_mock_client() -> AsyncMock:
+    """モックの GeminiKeyframeClient を作成する."""
+    mock_client = AsyncMock()
+    mock_client.analyze_scene.return_value = "A young woman standing at the entrance"
+
+    async def mock_generate_keyframe(char_image, env_image, flash_prompt, reference_image=None, output_path=None):
+        if output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake-keyframe")
+        return output_path
+
+    mock_client.generate_keyframe.side_effect = mock_generate_keyframe
+    return mock_client
 
 
 class TestGenerateKeyframes:
-    """RunwayKeyframeEngine.generate_keyframes のテスト."""
+    """GeminiKeyframeEngine.generate_keyframes のテスト."""
 
     @pytest.mark.asyncio
     async def test_generate_keyframes_全カット生成(
-        self, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
+        self, sample_scenario: Scenario, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
     ) -> None:
         """全カットのキーフレーム画像が生成される."""
-        mock_client = AsyncMock(spec=RunwayImageClient)
-
-        async def mock_generate(request, output_path):
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(b"fake-keyframe")
-            return _make_mock_image_result(output_path)
-
-        mock_client.generate.side_effect = mock_generate
-
-        engine = RunwayKeyframeEngine.from_components(image_client=mock_client)
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
         output_dir = tmp_path / "assets" / "keyframes"
-        result = await engine.generate_keyframes(sample_storyboard, sample_assets, output_dir)
+        result = await engine.generate_keyframes(sample_scenario, sample_storyboard, sample_assets, output_dir)
 
-        assert mock_client.generate.await_count == 4
+        assert mock_client.analyze_scene.await_count == 4
+        assert mock_client.generate_keyframe.await_count == 4
         assert len(result.keyframes) == 4
 
     @pytest.mark.asyncio
     async def test_generate_keyframes_AssetSet構造(
-        self, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
+        self, sample_scenario: Scenario, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
     ) -> None:
         """出力のAssetSetにkeyframesが正しく追加される."""
-        mock_client = AsyncMock(spec=RunwayImageClient)
-
-        async def mock_generate(request, output_path):
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(b"fake-keyframe")
-            return _make_mock_image_result(output_path)
-
-        mock_client.generate.side_effect = mock_generate
-
-        engine = RunwayKeyframeEngine.from_components(image_client=mock_client)
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
         output_dir = tmp_path / "assets" / "keyframes"
-        result = await engine.generate_keyframes(sample_storyboard, sample_assets, output_dir)
+        result = await engine.generate_keyframes(sample_scenario, sample_storyboard, sample_assets, output_dir)
 
         # 元のアセットは保持される
         assert len(result.characters) == 1
@@ -206,64 +196,46 @@ class TestGenerateKeyframes:
         # キーフレームが追加されている
         assert len(result.keyframes) == 4
         assert result.keyframes[0].scene_number == 1
-        assert result.keyframes[0].prompt == "@char walks out of a modern apartment entrance, morning light"
+        assert result.keyframes[0].cut_id == "scene_01_cut_01"
+        assert result.keyframes[0].generation_method == "gemini"
         assert result.keyframes[2].scene_number == 2
 
     @pytest.mark.asyncio
-    async def test_generate_keyframes_参照画像がfront_view(
-        self, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
+    async def test_generate_keyframes_identity_blockが渡される(
+        self, sample_scenario: Scenario, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
     ) -> None:
-        """参照画像としてcharacters[0].front_viewが使用される."""
-        mock_client = AsyncMock(spec=RunwayImageClient)
-
-        async def mock_generate(request, output_path):
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(b"fake-keyframe")
-            return _make_mock_image_result(output_path)
-
-        mock_client.generate.side_effect = mock_generate
-
-        engine = RunwayKeyframeEngine.from_components(image_client=mock_client)
+        """analyze_scene に identity_block が渡される."""
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
         output_dir = tmp_path / "assets" / "keyframes"
-        await engine.generate_keyframes(sample_storyboard, sample_assets, output_dir)
+        await engine.generate_keyframes(sample_scenario, sample_storyboard, sample_assets, output_dir)
 
-        # 各呼び出しで front_view が参照画像として使われている
-        for call in mock_client.generate.call_args_list:
-            request = call[0][0]
-            assert "char" in request.reference_images
-            assert request.reference_images["char"] == sample_assets.characters[0].front_view
+        for call in mock_client.analyze_scene.call_args_list:
+            assert call.kwargs["identity_block"] == "Young adult female, dark brown hair"
 
     @pytest.mark.asyncio
     async def test_generate_keyframes_キャラクター不在_ValueError(
-        self, sample_storyboard: Storyboard, tmp_path: Path
+        self, sample_scenario: Scenario, sample_storyboard: Storyboard, tmp_path: Path
     ) -> None:
         """キャラクターがない場合エラー."""
-        mock_client = AsyncMock(spec=RunwayImageClient)
-        engine = RunwayKeyframeEngine.from_components(image_client=mock_client)
-        empty_assets = AssetSet(characters=[], props=[], backgrounds=[])
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
+        empty_assets = AssetSet(characters=[])
 
         with pytest.raises(ValueError, match="キャラクターアセット"):
-            await engine.generate_keyframes(sample_storyboard, empty_assets, tmp_path / "keyframes")
+            await engine.generate_keyframes(sample_scenario, sample_storyboard, empty_assets, tmp_path / "keyframes")
 
 
 class TestKeyframeEngineExecute:
-    """RunwayKeyframeEngine.execute のテスト."""
+    """GeminiKeyframeEngine.execute のテスト."""
 
     @pytest.mark.asyncio
     async def test_execute_KeyframeInput経由(
         self, sample_scenario: Scenario, sample_storyboard: Storyboard, sample_assets: AssetSet, tmp_path: Path
     ) -> None:
         """execute が generate_keyframes を呼び、save_output で保存する."""
-        mock_client = AsyncMock(spec=RunwayImageClient)
-
-        async def mock_generate(request, output_path):
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(b"fake-keyframe")
-            return _make_mock_image_result(output_path)
-
-        mock_client.generate.side_effect = mock_generate
-
-        engine = RunwayKeyframeEngine.from_components(image_client=mock_client)
+        mock_client = _make_mock_client()
+        engine = GeminiKeyframeEngine.from_components(client=mock_client)
         input_data = KeyframeInput(scenario=sample_scenario, storyboard=sample_storyboard, assets=sample_assets)
         result = await engine.execute(input_data, tmp_path)
 
@@ -272,11 +244,11 @@ class TestKeyframeEngineExecute:
 
 
 class TestKeyframeEnginePersistence:
-    """RunwayKeyframeEngine の永続化テスト."""
+    """GeminiKeyframeEngine の永続化テスト."""
 
     def test_save_load_roundtrip(self, tmp_path: Path) -> None:
         """save_output → load_output のラウンドトリップ."""
-        engine = RunwayKeyframeEngine()
+        engine = GeminiKeyframeEngine()
 
         assets = AssetSet(
             characters=[
@@ -285,22 +257,23 @@ class TestKeyframeEnginePersistence:
                     front_view=Path("assets/character/front.png"),
                     side_view=Path("assets/character/side.png"),
                     back_view=Path("assets/character/back.png"),
+                    identity_block="Young adult female",
                 )
-            ],
-            props=[PropAsset(name="coffee", image_path=Path("assets/props/coffee.png"))],
-            backgrounds=[
-                BackgroundAsset(scene_number=1, description="玄関", image_path=Path("assets/bg/s01.png")),
             ],
             keyframes=[
                 KeyframeAsset(
                     scene_number=1,
                     image_path=Path("assets/keyframes/scene_01_cut_01.png"),
-                    prompt="@char at apartment entrance",
+                    prompt="flash generated prompt",
+                    cut_id="scene_01_cut_01",
+                    generation_method="gemini",
                 ),
                 KeyframeAsset(
                     scene_number=2,
                     image_path=Path("assets/keyframes/scene_02_cut_01.png"),
-                    prompt="@char at cafe counter",
+                    prompt="flash generated prompt 2",
+                    cut_id="scene_02_cut_01",
+                    generation_method="gemini",
                 ),
             ],
         )
@@ -310,12 +283,15 @@ class TestKeyframeEnginePersistence:
 
         assert len(loaded.keyframes) == 2
         assert loaded.keyframes[0].scene_number == 1
+        assert loaded.keyframes[0].cut_id == "scene_01_cut_01"
+        assert loaded.keyframes[0].generation_method == "gemini"
         assert loaded.keyframes[0].image_path == Path("assets/keyframes/scene_01_cut_01.png")
         assert loaded.characters[0].character_name == "Aoi"
+        assert loaded.characters[0].identity_block == "Young adult female"
 
     def test_load_output_ファイル未存在_FileNotFoundError(self, tmp_path: Path) -> None:
         """保存ファイルがない場合エラー."""
-        engine = RunwayKeyframeEngine()
+        engine = GeminiKeyframeEngine()
 
         with pytest.raises(FileNotFoundError, match="AssetSet"):
             engine.load_output(tmp_path)

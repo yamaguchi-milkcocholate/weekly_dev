@@ -1,6 +1,6 @@
 """schemas/scenario.py のテスト."""
 
-from daily_routine.schemas.scenario import CameraWork, CharacterSpec, PropSpec, Scenario, SceneSpec
+from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 
 
 def _make_scenario() -> Scenario:
@@ -13,13 +13,6 @@ def _make_scenario() -> Scenario:
                 appearance="20代女性、黒髪ロング",
                 outfit="オフィスカジュアル",
                 reference_prompt="20s Japanese woman, long black hair, office casual",
-            ),
-        ],
-        props=[
-            PropSpec(
-                name="スマートフォン",
-                description="主人公が使用するスマホ",
-                image_prompt="A modern smartphone, white background",
             ),
         ],
         scenes=[

@@ -35,22 +35,11 @@ class CharacterSpec(BaseModel):
     )
 
 
-class PropSpec(BaseModel):
-    """小物仕様."""
-
-    name: str = Field(description="小物名（日本語）")
-    description: str = Field(description="小物の詳細説明（日本語）。シナリオ内での用途・特徴を含む")
-    image_prompt: str = Field(
-        description="Asset Generator用の小物画像生成プロンプト（英語）。白背景、スタジオライティング、商品撮影風"
-    )
-
-
 class Scenario(BaseModel):
     """Scenario Engineの出力."""
 
     title: str = Field(description="動画タイトル（日本語）")
     total_duration_sec: float = Field(description="動画の総尺（秒）")
     characters: list[CharacterSpec] = Field(description="キャラクター仕様リスト")
-    props: list[PropSpec] = Field(description="小物仕様リスト")
     scenes: list[SceneSpec] = Field(description="シーン仕様リスト")
     bgm_direction: str = Field(description="BGMの方向性指示（日本語）。テンポ、ジャンル、雰囲気の変化等")

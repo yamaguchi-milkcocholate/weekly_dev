@@ -21,7 +21,11 @@ class TestGeminiImageClientInit:
         client = GeminiImageClient(api_key="test-key")
         assert client.api_key == "test-key"
         assert client.model_name == "gemini-3-pro-image-preview"
-        mock_llm_cls.assert_called_once_with(model="gemini-3-pro-image-preview", google_api_key="test-key")
+        assert client.flash_model_name == "gemini-3-flash-preview"
+        # Pro + Flash の2回呼ばれる
+        assert mock_llm_cls.call_count == 2
+        mock_llm_cls.assert_any_call(model="gemini-3-pro-image-preview", google_api_key="test-key")
+        mock_llm_cls.assert_any_call(model="gemini-3-flash-preview", google_api_key="test-key")
 
     @patch("daily_routine.asset.client.ChatGoogleGenerativeAI")
     def test_init_カスタムモデル名_反映される(self, mock_llm_cls):

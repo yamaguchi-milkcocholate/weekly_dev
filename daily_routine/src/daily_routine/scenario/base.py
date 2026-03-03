@@ -15,7 +15,7 @@ class ScenarioEngineBase(ABC):
         self,
         trend_report: TrendReport,
         output_dir: Path,
-        duration_range: tuple[int, int] = (30, 60),
+        duration_range: tuple[int, int] = (15, 60),
         user_direction: str | None = None,
     ) -> Scenario:
         """トレンド分析レポートからシナリオを生成する.
@@ -23,7 +23,7 @@ class ScenarioEngineBase(ABC):
         Args:
             trend_report: Intelligence Engine が生成したトレンド分析レポート
             output_dir: 出力ディレクトリ（scenario.json の保存先）
-            duration_range: 動画尺の範囲（秒）。デフォルトは 30〜60秒
+            duration_range: 動画尺の範囲（秒）。デフォルトは 15〜60秒
             user_direction: ユーザーのクリエイティブディレクション（自由テキスト）。
                 例: 「コメディ寄りにしたい」「朝のシーンを長めに」等。
                 省略時はトレンド分析のみに基づいて生成する。

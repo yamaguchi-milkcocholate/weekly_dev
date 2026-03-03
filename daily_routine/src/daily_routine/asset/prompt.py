@@ -2,7 +2,7 @@
 
 import logging
 
-from daily_routine.schemas.scenario import CharacterSpec, SceneSpec
+from daily_routine.schemas.scenario import CharacterSpec
 
 logger = logging.getLogger(__name__)
 
@@ -11,20 +11,87 @@ _STYLE_SUFFIX = "semi-realistic style, high quality, studio lighting"
 _WHITE_BG = "plain white background"
 
 # ビュー別のポーズ・アングル指定（PoC の VIEW_PROMPTS 構造を踏襲）
+# C1-F2-MA 検証で確立された全身条件を反映
 _VIEW_PROMPTS: dict[str, str] = {
-    "front": "full body, front view, standing pose, looking at camera",
-    "side": "full body, right side profile view, natural standing pose",
-    "back": "full body, rear view, standing pose, looking away from camera",
+    "front": "full body shot from head to feet, front view, standing pose, looking at camera",
+    "side": "full body shot from head to feet, right side profile view, natural standing pose",
+    "back": "full body shot from head to feet, rear view, standing pose, looking away from camera",
 }
 
-# 表情別のプロンプト付加
-_EXPRESSION_PROMPTS: dict[str, str] = {
-    "smile": "smiling warmly, happy expression",
-    "serious": "serious expression, focused look",
-    "surprised": "surprised expression, wide eyes, open mouth slightly",
-    "sad": "sad expression, downcast eyes",
-    "angry": "angry expression, furrowed brows",
+# C2-R2: 参照画像から環境再現（人物除去）
+_C2R2_BASE_PROMPT = (
+    "Image 1 shows a photo with people in a specific environment.\n"
+    "Recreate ONLY the environment/location from this image, "
+    "removing all people completely.\n"
+    "Keep: the exact same location type, structures, weather, lighting, "
+    "color palette, atmosphere, time of day.\n"
+    "Remove: all people, all persons.\n"
+    "The scene must have NO people, no persons, completely empty.\n"
+    "Composition: eye level camera, suitable for placing "
+    "a full-body standing person in the center of the frame.\n"
+    "Photo-realistic, natural lighting."
+)
+
+# --- C1-F2-MA プロンプト ---
+
+# Flash 融合分析プロンプト（person + clothing → テキスト記述）
+FLASH_FUSION_ANALYSIS_PROMPT = (
+    "Analyze all images carefully.\n"
+    "Image 1 shows a person. Image 2 shows an outfit.\n"
+    "Generate a detailed character description that combines:\n"
+    "- Physical features from image 1\n"
+    "- Outfit from image 2\n"
+    "Output only the character description, nothing else."
+)
+
+# Identity Block 抽出プロンプト（生成済み画像 → 再現用テキスト）
+IDENTITY_BLOCK_EXTRACTION_PROMPT = (
+    "Analyze this character and generate a concise identity description\n"
+    "covering: age, gender, ethnicity, build, face features, hair, outfit,\n"
+    "accessories. This will be used to reproduce this exact character\n"
+    "in different scenes. Output only the description."
+)
+
+# Pro マルチアングル生成テンプレート
+_MA_GENERATION_TEMPLATE = (
+    "Image 1 shows the reference person. Image 2 shows the outfit.\n"
+    "Generate a photo of the following character:\n"
+    "{flash_description}\n"
+    "Full body shot from head to feet, standing, {angle_instruction}, neutral background.\n"
+    "The entire body including shoes must be fully visible with space below the feet.\n"
+    "Single person only, solo."
+)
+
+# マルチアングル生成のアングル別指示
+_MA_ANGLE_INSTRUCTIONS: dict[str, str] = {
+    "front": "facing the camera",
+    "side": "side view (profile)",
+    "back": "back view (seen from behind)",
 }
+
+# 人物ベース画像自動生成テンプレート（person が null の場合）
+_AUTO_PERSON_TEMPLATE = (
+    "A person with the following appearance:\n"
+    "{appearance}\n"
+    "Full body shot from head to feet, standing, facing the camera, plain white background.\n"
+    "The entire body including shoes must be fully visible with space below the feet.\n"
+    "Single person only, solo. Photo-realistic, studio lighting."
+)
+
+# 服装画像自動生成テンプレート（clothing が null の場合）
+_AUTO_CLOTHING_TEMPLATE = (
+    "A flat lay photo of the following outfit on a plain white background:\n"
+    "{outfit}\n"
+    "Neatly arranged, no person wearing it. Studio lighting, high quality."
+)
+
+# テキストベース環境生成の構図指示サフィックス
+_C2_TEXT_GENERATION_SUFFIX = (
+    "\nThe scene must have NO people, no persons, completely empty.\n"
+    "Composition: eye level camera, suitable for placing "
+    "a full-body standing person in the center of the frame.\n"
+    "Photo-realistic, natural lighting."
+)
 
 
 class PromptBuilder:
@@ -69,62 +136,68 @@ class PromptBuilder:
         # 正面以外でも参照なしの場合（通常は発生しないが安全のため）
         return f"{character.appearance}. {character.outfit}. {view_prompt}, {_WHITE_BG}, {_STYLE_SUFFIX}"
 
-    def build_expression_prompt(
-        self,
-        character: CharacterSpec,
-        expression: str,
-        has_reference: bool = False,
-    ) -> str:
-        """キャラクターの表情バリエーション用プロンプトを構築する.
+    def build_ma_generation_prompt(self, flash_description: str, view: str) -> str:
+        """C1-F2-MA マルチアングル生成プロンプトを構築する.
 
         Args:
-            character: キャラクター仕様
-            expression: 表情名 ("smile", "serious", "surprised" 等)
-            has_reference: 参照画像がある場合 True
+            flash_description: Flash 融合分析で生成されたキャラクター記述
+            view: 生成するビュー ("front" | "side" | "back")
 
         Returns:
             画像生成プロンプト
         """
-        expression_prompt = _EXPRESSION_PROMPTS.get(expression, expression)
+        angle_instruction = _MA_ANGLE_INSTRUCTIONS.get(view)
+        if angle_instruction is None:
+            msg = "不明なビュー: %s (対応: %s)"
+            raise ValueError(msg % (view, ", ".join(_MA_ANGLE_INSTRUCTIONS)))
 
-        if has_reference:
-            return (
-                f"Generate this same character with {expression_prompt}. "
-                f"Maintain the exact same appearance, clothing, and style as the reference image. "
-                f"{character.appearance}. {character.outfit}. "
-                f"Upper body, front view, {_WHITE_BG}, {_STYLE_SUFFIX}"
-            )
-
-        return (
-            f"{character.appearance}. {character.outfit}. "
-            f"{expression_prompt}. "
-            f"Upper body, front view, {_WHITE_BG}, {_STYLE_SUFFIX}"
+        return _MA_GENERATION_TEMPLATE.format(
+            flash_description=flash_description,
+            angle_instruction=angle_instruction,
         )
 
-    def build_prop_prompt(self, name: str, description: str) -> str:
-        """小物の画像生成プロンプトを構築する.
-
-        設計書方針: 白背景、スタジオライティング、商品撮影風
+    def build_auto_person_prompt(self, appearance: str) -> str:
+        """人物ベース画像の自動生成プロンプトを構築する.
 
         Args:
-            name: 小物名
-            description: 小物の説明
+            appearance: CharacterSpec.appearance テキスト
 
         Returns:
             画像生成プロンプト
         """
-        return f"{description}. Product photography style, {_WHITE_BG}, {_STYLE_SUFFIX}"
+        return _AUTO_PERSON_TEMPLATE.format(appearance=appearance)
 
-    def build_background_prompt(self, scene: SceneSpec) -> str:
-        """背景の画像生成プロンプトを構築する.
-
-        設計書方針: シーンの image_prompt を基盤とし、キャラクター不在・背景のみの指定を付加
+    def build_auto_clothing_prompt(self, outfit: str) -> str:
+        """服装画像の自動生成プロンプトを構築する.
 
         Args:
-            scene: シーン仕様
+            outfit: CharacterSpec.outfit テキスト
 
         Returns:
             画像生成プロンプト
         """
-        # SceneSpec.image_prompt は既にキャラクター不在の背景用プロンプト
-        return scene.image_prompt
+        return _AUTO_CLOTHING_TEMPLATE.format(outfit=outfit)
+
+    def build_environment_prompt(self, modification: str = "") -> str:
+        """C2-R2 / C2-R2-MOD 環境再現プロンプトを構築する.
+
+        Args:
+            modification: C2-R2-MOD 修正指示（空なら C2-R2 そのまま）
+
+        Returns:
+            画像生成プロンプト
+        """
+        if modification:
+            return f"{_C2R2_BASE_PROMPT}\n{modification}"
+        return _C2R2_BASE_PROMPT
+
+    def build_environment_text_prompt(self, image_prompt: str) -> str:
+        """テキストベース環境生成プロンプトを構築する.
+
+        Args:
+            image_prompt: SceneSpec.image_prompt
+
+        Returns:
+            画像生成プロンプト
+        """
+        return f"{image_prompt}{_C2_TEXT_GENERATION_SUFFIX}"

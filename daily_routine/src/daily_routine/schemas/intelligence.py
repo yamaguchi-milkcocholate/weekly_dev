@@ -26,7 +26,6 @@ class VisualTrend(BaseModel):
     """映像トレンド."""
 
     situations: list[str] = Field(description="シチュエーション一覧")
-    props: list[str] = Field(description="登場小物")
     camera_works: list[str] = Field(description="カメラワーク")
     color_tones: list[str] = Field(description="色調・フィルタ")
 
@@ -44,7 +43,6 @@ class AssetRequirement(BaseModel):
     """素材要件."""
 
     characters: list[str] = Field(description="必要なキャラクター")
-    props: list[str] = Field(description="必要な小物")
     backgrounds: list[str] = Field(description="必要な背景")
 
 

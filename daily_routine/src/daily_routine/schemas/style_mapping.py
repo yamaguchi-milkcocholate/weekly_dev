@@ -1,4 +1,9 @@
-"""スタイル参照画像のマッピングスキーマ."""
+"""スタイル参照画像のマッピングスキーマ.
+
+非推奨: このモジュールは Runway Gen-4 Image 方式で使用していたもの。
+Gemini C3-I1 方式への移行に伴い、schemas/keyframe_mapping.py に置き換え。
+プロダクションコードからの参照は全て削除済み。テスト互換のため残置。
+"""
 
 from pathlib import Path
 

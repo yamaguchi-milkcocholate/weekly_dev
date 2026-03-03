@@ -29,7 +29,6 @@ def _make_trend_report() -> TrendReport:
         ),
         visual_trend=VisualTrend(
             situations=["通勤"],
-            props=["スマホ"],
             camera_works=["POV"],
             color_tones=["暖色系"],
         ),
@@ -41,7 +40,6 @@ def _make_trend_report() -> TrendReport:
         ),
         asset_requirements=AssetRequirement(
             characters=["OL"],
-            props=["スマホ", "コーヒー"],
             backgrounds=["オフィス", "電車"],
         ),
     )

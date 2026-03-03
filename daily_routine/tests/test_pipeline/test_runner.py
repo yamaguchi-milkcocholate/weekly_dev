@@ -14,7 +14,7 @@ from daily_routine.pipeline.runner import (
     _engine_kwargs,
     _get_next_step,
     _get_previous_step,
-    _load_style_mapping,
+    _load_keyframe_mapping,
     resume_pipeline,
     retry_pipeline,
     run_pipeline,
@@ -279,10 +279,10 @@ class TestEngineKwargs:
         result = _engine_kwargs(PipelineStep.ASSET, api_keys)
         assert result == {"api_key": "gai-key"}
 
-    def test_keyframeステップ_runway_api_key(self) -> None:
-        api_keys = {"runway": "rw-key", "gcs_bucket": "my-bucket", "image_model": "gen4_image_turbo"}
+    def test_keyframeステップ_google_ai_api_key(self) -> None:
+        api_keys = {"google_ai": "gai-key"}
         result = _engine_kwargs(PipelineStep.KEYFRAME, api_keys)
-        assert result == {"api_key": "rw-key", "gcs_bucket": "my-bucket", "image_model": "gen4_image_turbo"}
+        assert result == {"api_key": "gai-key"}
 
     def test_visualステップ_runway_api_key(self) -> None:
         api_keys = {"runway": "rw-key", "gcs_bucket": "my-bucket", "video_model": "gen4_turbo"}
@@ -295,39 +295,45 @@ class TestEngineKwargs:
         assert result == {}
 
 
-class TestLoadStyleMapping:
-    """_load_style_mapping のテスト."""
+class TestLoadKeyframeMapping:
+    """_load_keyframe_mapping のテスト."""
 
     def test_ファイルが存在しない_None(self, tmp_path: Path) -> None:
-        result = _load_style_mapping(tmp_path)
+        result = _load_keyframe_mapping(tmp_path)
         assert result is None
 
-    def test_ファイルが存在する_StyleMapping返却(self, tmp_path: Path) -> None:
+    def test_ファイルが存在する_KeyframeMapping返却(self, tmp_path: Path) -> None:
         storyboard_dir = tmp_path / "storyboard"
         storyboard_dir.mkdir()
-        mapping_file = storyboard_dir / "style_mapping.yaml"
+        mapping_file = storyboard_dir / "keyframe_mapping.yaml"
         mapping_file.write_text(
-            "mappings:\n"
+            "scenes:\n"
             "  - scene_number: 1\n"
-            '    reference: "seeds/captures/abc/7.png"\n'
+            '    character: "Aoi"\n'
+            '    pose: "standing"\n'
             "  - scene_number: 3\n"
-            '    reference: "assets/reference/cafe.png"\n',
+            '    character: "Aoi"\n'
+            '    reference_text: "cafe atmosphere"\n',
             encoding="utf-8",
         )
 
-        result = _load_style_mapping(tmp_path)
+        result = _load_keyframe_mapping(tmp_path)
         assert result is not None
-        assert len(result.mappings) == 2
-        assert result.get_reference(1) == Path("seeds/captures/abc/7.png")
-        assert result.get_reference(3) == Path("assets/reference/cafe.png")
-        assert result.get_reference(2) is None
+        assert len(result.scenes) == 2
+        spec1 = result.get_spec(1)
+        assert spec1 is not None
+        assert spec1.pose == "standing"
+        spec3 = result.get_spec(3)
+        assert spec3 is not None
+        assert spec3.reference_text == "cafe atmosphere"
+        assert result.get_spec(2) is None
 
     def test_空マッピング_空リスト(self, tmp_path: Path) -> None:
         storyboard_dir = tmp_path / "storyboard"
         storyboard_dir.mkdir()
-        mapping_file = storyboard_dir / "style_mapping.yaml"
-        mapping_file.write_text("mappings: []\n", encoding="utf-8")
+        mapping_file = storyboard_dir / "keyframe_mapping.yaml"
+        mapping_file.write_text("scenes: []\n", encoding="utf-8")
 
-        result = _load_style_mapping(tmp_path)
+        result = _load_keyframe_mapping(tmp_path)
         assert result is not None
-        assert len(result.mappings) == 0
+        assert len(result.scenes) == 0
