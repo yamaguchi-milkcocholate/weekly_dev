@@ -362,6 +362,63 @@ Post-Production は全過去レイヤーの出力を使用する:
 | `AudioAsset.sound_effects[].file_path`       | SE ファイル                |
 | `AudioAsset.sound_effects[].trigger_time_ms` | SE 挿入タイミング          |
 
+## 3.7 パイプラインモード
+
+パイプラインは3つのモードで実行できる。コア（Production）をコンテンツ非依存にし、プランニングは外部から挿入可能とする。
+
+### Full モード（従来通り）
+
+```
+run → resume を繰り返し
+[Intelligence → Scenario → Storyboard → Asset → Keyframe → Visual → Audio → Post-Production]
+```
+
+全8ステップを順次実行する。`run` コマンドで開始。
+
+### Planning モード
+
+```
+plan → resume を繰り返し
+[Intelligence → Scenario → Storyboard]
+```
+
+プランニングステップのみ実行する。`plan` コマンドで開始。生成された scenario.json / storyboard.json をユーザーが手動編集してから `produce` でプロダクションに移行できる。
+
+### Production モード
+
+```
+produce → resume を繰り返し
+[Asset → Keyframe → Visual → Audio]
+```
+
+コンテンツ非依存のプロダクションステップのみ実行する。`produce` コマンドで開始。事前に scenario.json / storyboard.json がプロジェクトディレクトリに配置されている必要がある。Intelligence 未実行時は AudioTrend にデフォルト値を使用する。
+
+### コア境界
+
+```
+┌─────────────────────────────────────┐    ┌────────────────────────────────────────┐
+│  Planning（コンテンツ依存）          │    │  Production Core（コンテンツ非依存）    │
+│                                     │    │                                        │
+│  Intelligence → Scenario →          │    │  Asset → Keyframe → Visual → Audio     │
+│  Storyboard                         │    │                                        │
+│                                     │    │  入力契約: Scenario + Storyboard       │
+│  出力: scenario.json,               │    │  （手動配置 or Planning の出力）        │
+│        storyboard.json              │    │                                        │
+└─────────────────────────────────────┘    └────────────────────────────────────────┘
+```
+
+### CLI コマンド一覧
+
+| コマンド | 用途 | 開始ステップ |
+|----------|------|-------------|
+| `run <keyword>` | フル8ステップ（後方互換） | Intelligence |
+| `plan <keyword>` | プランニングのみ | Intelligence |
+| `produce <project-id>` | プロダクションのみ | Asset |
+| `resume <project-id>` | 次ステップへ進行（全モード共通） | — |
+| `retry <project-id>` | エラー再試行 | — |
+| `status <project-id>` | 状態表示 | — |
+| `init <keyword>` | プロジェクト初期化のみ | — |
+
 ## 4. パイプライン統合方式
 
 ### 4.1 StepEngine と各レイヤー ABC の関係

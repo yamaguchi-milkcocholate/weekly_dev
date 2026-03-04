@@ -9,6 +9,9 @@ from daily_routine.pipeline.base import StepEngine
 from daily_routine.pipeline.exceptions import InvalidStateError
 from daily_routine.pipeline.registry import _registry, register_engine
 from daily_routine.pipeline.runner import (
+    FULL_STEP_ORDER,
+    PLANNING_STEP_ORDER,
+    PRODUCTION_STEP_ORDER,
     STEP_ORDER,
     _build_input,
     _engine_kwargs,
@@ -18,6 +21,8 @@ from daily_routine.pipeline.runner import (
     resume_pipeline,
     retry_pipeline,
     run_pipeline,
+    run_planning_pipeline,
+    run_production_pipeline,
 )
 from daily_routine.pipeline.state import initialize_state, save_state
 from daily_routine.schemas.project import (
@@ -238,13 +243,28 @@ class TestExecuteStepError:
 class TestHelpers:
     """ヘルパー関数のテスト."""
 
-    def test_get_next_step(self) -> None:
-        assert _get_next_step(PipelineStep.INTELLIGENCE) == PipelineStep.SCENARIO
-        assert _get_next_step(PipelineStep.POST_PRODUCTION) is None
+    def test_get_next_step_フルパイプライン(self) -> None:
+        state = initialize_state("test")
+        assert _get_next_step(PipelineStep.INTELLIGENCE, state) == PipelineStep.SCENARIO
+        assert _get_next_step(PipelineStep.POST_PRODUCTION, state) is None
 
-    def test_get_previous_step(self) -> None:
-        assert _get_previous_step(PipelineStep.SCENARIO) == PipelineStep.INTELLIGENCE
-        assert _get_previous_step(PipelineStep.INTELLIGENCE) is None
+    def test_get_previous_step_フルパイプライン(self) -> None:
+        state = initialize_state("test")
+        assert _get_previous_step(PipelineStep.SCENARIO, state) == PipelineStep.INTELLIGENCE
+        assert _get_previous_step(PipelineStep.INTELLIGENCE, state) is None
+
+    def test_get_next_step_プロダクションのみ(self) -> None:
+        state = initialize_state("test", step_order=PRODUCTION_STEP_ORDER)
+        assert _get_next_step(PipelineStep.ASSET, state) == PipelineStep.KEYFRAME
+        assert _get_next_step(PipelineStep.AUDIO, state) is None
+        # フルパイプラインに含まれるがプロダクションには含まれないステップ
+        assert _get_next_step(PipelineStep.INTELLIGENCE, state) is None
+
+    def test_get_previous_step_プランニングのみ(self) -> None:
+        state = initialize_state("test", step_order=PLANNING_STEP_ORDER)
+        assert _get_previous_step(PipelineStep.SCENARIO, state) == PipelineStep.INTELLIGENCE
+        assert _get_previous_step(PipelineStep.INTELLIGENCE, state) is None
+        assert _get_previous_step(PipelineStep.STORYBOARD, state) == PipelineStep.SCENARIO
 
 
 class TestEngineKwargs:
@@ -337,3 +357,140 @@ class TestLoadKeyframeMapping:
         result = _load_keyframe_mapping(tmp_path)
         assert result is not None
         assert len(result.scenes) == 0
+
+
+class TestRunProductionPipeline:
+    """run_production_pipeline のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_ASSETステップから開始(self, tmp_path) -> None:
+        # scenario と storyboard の出力を配置（MockEngine の load_output が使われるので mock_output.txt を配置）
+        (tmp_path / "mock_output.txt").write_text("mock_output")
+
+        state = await run_production_pipeline(tmp_path, "prod-project")
+
+        assert state.project_id == "prod-project"
+        assert state.current_step == PipelineStep.ASSET
+        assert state.steps[PipelineStep.ASSET].status == CheckpointStatus.AWAITING_REVIEW
+        # プランニングステップは含まれない
+        assert PipelineStep.INTELLIGENCE not in state.steps
+        assert PipelineStep.SCENARIO not in state.steps
+        assert PipelineStep.STORYBOARD not in state.steps
+        # プロダクションステップのみ含まれる
+        assert list(state.steps.keys()) == PRODUCTION_STEP_ORDER
+
+    @pytest.mark.asyncio
+    async def test_前提ファイル不足_InvalidStateError(self, tmp_path) -> None:
+        # MockEngine の load_output はファイルが無くてもデフォルト値を返すため
+        # _validate_production_prerequisites を直接テスト
+        # FailingEngine を scenario に登録してファイル不在をシミュレート
+
+        class _FileNotFoundEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> str:
+                msg = "scenario.json が見つかりません"
+                raise FileNotFoundError(msg)
+
+        _registry.clear()
+        register_engine(PipelineStep.SCENARIO, _FileNotFoundEngine)
+        register_engine(PipelineStep.STORYBOARD, _FileNotFoundEngine)
+        for step in PipelineStep:
+            if step not in (PipelineStep.SCENARIO, PipelineStep.STORYBOARD):
+                register_engine(step, MockEngine)
+
+        with pytest.raises(InvalidStateError, match="scenario"):
+            await run_production_pipeline(tmp_path, "prod-project")
+
+    def test_resume_プロダクションステップ内の次ステップ導出(self, tmp_path) -> None:
+        state = initialize_state("prod-project", step_order=PRODUCTION_STEP_ORDER)
+        # プロダクションパイプラインで ASSET → KEYFRAME → VISUAL → AUDIO の順序が保持される
+        assert _get_next_step(PipelineStep.ASSET, state) == PipelineStep.KEYFRAME
+        assert _get_next_step(PipelineStep.KEYFRAME, state) == PipelineStep.VISUAL
+        assert _get_next_step(PipelineStep.VISUAL, state) == PipelineStep.AUDIO
+        assert _get_next_step(PipelineStep.AUDIO, state) is None
+        # INTELLIGENCE は state に含まれないので None
+        assert _get_next_step(PipelineStep.INTELLIGENCE, state) is None
+
+    @pytest.mark.asyncio
+    async def test_最終ステップ_プロダクション完了(self, tmp_path) -> None:
+        # AUDIO を AWAITING_REVIEW にしたプロダクション状態を作成
+        state = initialize_state("prod-project", step_order=PRODUCTION_STEP_ORDER)
+        for step in PRODUCTION_STEP_ORDER[:-1]:
+            state.steps[step].status = CheckpointStatus.APPROVED
+        state.steps[PipelineStep.AUDIO].status = CheckpointStatus.AWAITING_REVIEW
+        state.current_step = PipelineStep.AUDIO
+        save_state(tmp_path, state)
+
+        state = await resume_pipeline(tmp_path)
+
+        assert state.completed is True
+        assert state.steps[PipelineStep.AUDIO].status == CheckpointStatus.APPROVED
+
+
+class TestRunPlanningPipeline:
+    """run_planning_pipeline のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_INTELLIGENCEステップから開始(self, tmp_path) -> None:
+        state = await run_planning_pipeline(tmp_path, "plan-project", "OLの一日")
+
+        assert state.project_id == "plan-project"
+        assert state.current_step == PipelineStep.INTELLIGENCE
+        assert state.steps[PipelineStep.INTELLIGENCE].status == CheckpointStatus.AWAITING_REVIEW
+        # プロダクションステップは含まれない
+        assert PipelineStep.ASSET not in state.steps
+        assert PipelineStep.VISUAL not in state.steps
+        # プランニングステップのみ含まれる
+        assert list(state.steps.keys()) == PLANNING_STEP_ORDER
+
+    @pytest.mark.asyncio
+    async def test_seed_videos付きで実行(self, tmp_path) -> None:
+        seeds = [SeedVideo(note="参考動画")]
+        state = await run_planning_pipeline(tmp_path, "plan-project", "OLの一日", seed_videos=seeds)
+
+        assert state.steps[PipelineStep.INTELLIGENCE].status == CheckpointStatus.AWAITING_REVIEW
+
+    @pytest.mark.asyncio
+    async def test_最終ステップ_プランニング完了(self, tmp_path) -> None:
+        # STORYBOARD を AWAITING_REVIEW にしたプランニング状態を作成
+        state = initialize_state("plan-project", step_order=PLANNING_STEP_ORDER)
+        for step in PLANNING_STEP_ORDER[:-1]:
+            state.steps[step].status = CheckpointStatus.APPROVED
+        state.steps[PipelineStep.STORYBOARD].status = CheckpointStatus.AWAITING_REVIEW
+        state.current_step = PipelineStep.STORYBOARD
+        save_state(tmp_path, state)
+
+        state = await resume_pipeline(tmp_path)
+
+        assert state.completed is True
+        assert state.steps[PipelineStep.STORYBOARD].status == CheckpointStatus.APPROVED
+
+
+class TestDynamicStepOrder:
+    """state ベースのステップ順序テスト."""
+
+    def test_プロダクションパイプラインのステップ順序_INTELLIGENCEに飛ばない(self) -> None:
+        """プロダクションパイプラインの state では ASSET の次は KEYFRAME になること."""
+        state = initialize_state("prod-project", step_order=PRODUCTION_STEP_ORDER)
+
+        # ASSET → KEYFRAME（INTELLIGENCE や SCENARIO には飛ばない）
+        next_step = _get_next_step(PipelineStep.ASSET, state)
+        assert next_step == PipelineStep.KEYFRAME
+        assert PipelineStep.INTELLIGENCE not in state.steps
+
+    @pytest.mark.asyncio
+    async def test_プロダクションパイプラインの永続化と復元(self, tmp_path) -> None:
+        """プロダクション state がYAML永続化を通じてステップ順序を維持すること."""
+        state = initialize_state("prod-project", step_order=PRODUCTION_STEP_ORDER)
+        state.steps[PipelineStep.ASSET].status = CheckpointStatus.AWAITING_REVIEW
+        state.current_step = PipelineStep.ASSET
+        save_state(tmp_path, state)
+
+        from daily_routine.pipeline.state import load_state
+
+        loaded = load_state(tmp_path)
+        assert list(loaded.steps.keys()) == PRODUCTION_STEP_ORDER
+        assert _get_next_step(PipelineStep.ASSET, loaded) == PipelineStep.KEYFRAME
+
+    def test_step_order定数の整合性(self) -> None:
+        assert STEP_ORDER == FULL_STEP_ORDER
+        assert PLANNING_STEP_ORDER + PRODUCTION_STEP_ORDER == FULL_STEP_ORDER[:-1]  # POST_PRODUCTION除く

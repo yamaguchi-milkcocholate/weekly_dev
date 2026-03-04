@@ -16,18 +16,25 @@ logger = logging.getLogger(__name__)
 _STATE_FILE = "state.yaml"
 
 
-def initialize_state(project_id: str) -> PipelineState:
+def initialize_state(
+    project_id: str,
+    step_order: list[PipelineStep] | None = None,
+) -> PipelineState:
     """初期状態のPipelineStateを生成する.
 
-    全ステップをPENDINGで初期化する。
+    step_orderが指定されればそのサブセットのみ初期化する。
+    Noneの場合は全ステップをPENDINGで初期化する（後方互換）。
 
     Args:
         project_id: プロジェクトID
+        step_order: 初期化するステップの順序リスト（Noneで全ステップ）
 
     Returns:
         初期化されたPipelineState
     """
-    steps = {step: StepState() for step in PipelineStep}
+    if step_order is None:
+        step_order = list(PipelineStep)
+    steps = {step: StepState() for step in step_order}
     return PipelineState(project_id=project_id, steps=steps)
 
 

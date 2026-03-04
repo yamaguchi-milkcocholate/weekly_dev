@@ -49,6 +49,18 @@ class TestCliHelp:
         assert result.exit_code == 0
         assert "--seeds" in result.output
 
+    def test_plan_help(self) -> None:
+        result = runner.invoke(app, ["plan", "--help"])
+        assert result.exit_code == 0
+        assert "検索キーワード" in result.output
+        assert "プランニング" in result.output
+
+    def test_produce_help(self) -> None:
+        result = runner.invoke(app, ["produce", "--help"])
+        assert result.exit_code == 0
+        assert "プロジェクトID" in result.output
+        assert "プロダクション" in result.output
+
 
 class TestLoadSeeds:
     """_load_seeds のテスト."""

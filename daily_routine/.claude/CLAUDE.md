@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 「〇〇の一日」AI動画生成自動化パイプライン。YouTube Shorts（9:16, 1080x1920）を自動生成する。
 6層アーキテクチャ: Intelligence → Scenario → Asset → Visual → Audio → Post-Production
+パイプラインはコア/プランニング分離設計。Planning（Intelligence→Scenario→Storyboard）と Production Core（Asset→Keyframe→Visual→Audio）を独立実行可能。
 
 ## コマンド
 
@@ -25,7 +26,9 @@ uv run ruff check --fix .              # リント自動修正
 uv run ruff format .                   # フォーマット自動修正
 
 # CLI実行
-uv run daily-routine run "OLの一日"
+uv run daily-routine run "OLの一日"            # フル8ステップ
+uv run daily-routine plan "OLの一日"           # プランニングのみ（Intelligence→Scenario→Storyboard）
+uv run daily-routine produce <project-id>      # プロダクションのみ（Asset→Keyframe→Visual→Audio）
 uv run daily-routine init "検索キーワード"
 uv run daily-routine status "project-id"
 ```

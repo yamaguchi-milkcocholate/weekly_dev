@@ -37,6 +37,7 @@ class CutSpec(BaseModel):
     keyframe_prompt: str = Field(description="キーフレーム画像プロンプト（英語、@char タグでキャラクター参照）")
     transition: Transition = Field(default=Transition.CUT, description="次のカットへのトランジション種別")
     pose_instruction: str = Field(default="", description="ポーズ指示（C3-I1 Flash分析入力）")
+    has_character: bool = Field(default=True, description="キャラクターが登場するカットかどうか")
 
 
 class SceneStoryboard(BaseModel):

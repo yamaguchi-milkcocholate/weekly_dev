@@ -32,6 +32,7 @@ _CONTENT_TEXT_BY_PURPOSE: dict[str, str] = {
     "background": "Background object reference: {text}",
     "interaction": "Item reference (character uses this): {text}",
     "general": "Additional reference: {text}",
+    "subject": "Main subject reference: {text}",
 }
 
 

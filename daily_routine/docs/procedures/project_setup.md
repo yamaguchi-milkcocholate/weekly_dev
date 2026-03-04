@@ -267,14 +267,52 @@ scenes:
 - 自動生成時は先頭バリアントが全シーンに割り当てられるため、ユーザーが各シーンの衣装を手動で編集する
 - 旧フォーマット（`character`/`variant_id`/`reference_image`/`reference_text` をフラットに記述）も後方互換で自動変換される
 
-### 2.5 エラー時の再試行
+### 2.5 プランニングのみの実行
+
+プランニングステップ（Intelligence → Scenario → Storyboard）のみを実行する場合:
+
+```bash
+# プランニングのみ実行
+uv run daily-routine plan "OLの一日"
+
+# resume で Scenario → Storyboard と進行
+uv run daily-routine resume <project-id>
+
+# scenario.json / storyboard.json を手動編集
+# ...
+
+# プロダクションに移行
+uv run daily-routine produce <project-id>
+```
+
+### 2.6 手動絵コンテからのプロダクション
+
+事前にシナリオ・絵コンテが確定している場合（例: コーヒーCM）:
+
+```bash
+# プロジェクトを初期化
+uv run daily-routine init "コーヒーCM" --project-id coffee-cm
+
+# scenario.json + storyboard.json を手動配置
+# environment_seeds.yaml を作成
+
+# プロダクションパイプラインを実行（ASSET から開始）
+uv run daily-routine produce coffee-cm
+
+# resume で Keyframe → Visual → Audio と進行
+uv run daily-routine resume coffee-cm
+```
+
+`produce` は `scenario.json` と `storyboard.json` の存在を検証してから開始する。Intelligence 未実行の場合、Audio ステップでは AudioTrend にデフォルト値が使用される。
+
+### 2.7 エラー時の再試行
 
 ```bash
 # ERROR 状態のステップを再実行
 uv run daily-routine retry my-project-001
 ```
 
-### 2.6 プロジェクト状態の確認
+### 2.8 プロジェクト状態の確認
 
 ```bash
 uv run daily-routine status my-project-001

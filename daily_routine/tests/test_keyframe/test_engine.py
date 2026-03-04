@@ -6,9 +6,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daily_routine.keyframe.engine import GeminiKeyframeEngine
-from daily_routine.keyframe.prompt import ReferenceInfo
 from daily_routine.schemas.asset import AssetSet, CharacterAsset, EnvironmentAsset
-from daily_routine.schemas.keyframe_mapping import KeyframeMapping, ReferenceComponent, ReferencePurpose, SceneKeyframeSpec
+from daily_routine.schemas.keyframe_mapping import (
+    KeyframeMapping,
+    ReferenceComponent,
+    ReferencePurpose,
+    SceneKeyframeSpec,
+)
 from daily_routine.schemas.scenario import CameraWork, CharacterSpec, Scenario, SceneSpec
 from daily_routine.schemas.storyboard import (
     CutSpec,
@@ -502,6 +506,125 @@ class TestGenerateKeyframes:
         # scene 2: マッピングで "オフィス" を指定 → env_a（description一致）
         call2 = client.analyze_scene.call_args_list[1]
         assert call2.kwargs["env_image"] == env_a
+
+    @pytest.mark.asyncio
+    async def test_has_character_false_char_images空(self, tmp_path: Path) -> None:
+        """has_character=False のカットでは char_images=[], identity_blocks=[] が渡される."""
+        output_dir = tmp_path / "keyframes"
+        assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
+        # scene 2 のカットを has_character=False に
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=6.0,
+            total_cuts=2,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="slow zoom-in",
+                            action_description="テスト動作1",
+                            motion_prompt="@char moves slowly",
+                            keyframe_prompt="@char in a room",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=2,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_02_cut_01",
+                            scene_number=2,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.MODERATE,
+                            camera_work="pan left",
+                            action_description="コーヒー豆のクローズアップ",
+                            motion_prompt="Steam rises slowly",
+                            keyframe_prompt="Coffee beans on wooden table",
+                            transition=Transition.CUT,
+                            has_character=False,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        # scene 1: has_character=True → キャラクター画像あり
+        call1 = client.analyze_scene.call_args_list[0]
+        assert len(call1.kwargs["char_images"]) == 1
+        assert len(call1.kwargs["identity_blocks"]) == 1
+
+        # scene 2: has_character=False → キャラクター画像なし
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["char_images"] == []
+        assert call2.kwargs["identity_blocks"] == []
+
+    @pytest.mark.asyncio
+    async def test_全カットhas_character_false_キャラクターなし_エラーなし(self, tmp_path: Path) -> None:
+        """全カットが has_character=False + assets.characters=[] でもエラーにならない."""
+        output_dir = tmp_path / "keyframes"
+        assets = AssetSet(characters=[])
+        scenario = _make_scenario()
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=3.0,
+            total_cuts=1,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.STATIC,
+                            camera_work="static",
+                            action_description="コーヒー豆のクローズアップ",
+                            motion_prompt="Steam rises slowly",
+                            keyframe_prompt="Coffee beans on wooden table",
+                            transition=Transition.CUT,
+                            has_character=False,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        result = await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        assert len(result.keyframes) == 1
+        call1 = client.analyze_scene.call_args_list[0]
+        assert call1.kwargs["char_images"] == []
+        assert call1.kwargs["identity_blocks"] == []
 
     @pytest.mark.asyncio
     async def test_purpose付き参照がreference_infosに伝搬(self, tmp_path: Path) -> None:

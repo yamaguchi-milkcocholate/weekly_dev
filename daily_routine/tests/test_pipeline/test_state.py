@@ -55,6 +55,36 @@ class TestSaveAndLoadState:
         assert loaded.steps[PipelineStep.ASSET].retry_count == 3
 
 
+class TestInitializeStateWithStepOrder:
+    """initialize_state の step_order 指定テスト."""
+
+    def test_step_order指定_指定ステップのみ初期化(self) -> None:
+        step_order = [PipelineStep.ASSET, PipelineStep.KEYFRAME, PipelineStep.VISUAL, PipelineStep.AUDIO]
+        state = initialize_state("production-project", step_order=step_order)
+
+        assert state.project_id == "production-project"
+        assert list(state.steps.keys()) == step_order
+        for step in step_order:
+            assert state.steps[step].status == CheckpointStatus.PENDING
+        # プランニングステップは含まれない
+        assert PipelineStep.INTELLIGENCE not in state.steps
+        assert PipelineStep.SCENARIO not in state.steps
+        assert PipelineStep.STORYBOARD not in state.steps
+
+    def test_step_order_None_全ステップ初期化(self) -> None:
+        state = initialize_state("full-project", step_order=None)
+
+        for step in PipelineStep:
+            assert step in state.steps
+
+    def test_step_order_プランニングのみ(self) -> None:
+        step_order = [PipelineStep.INTELLIGENCE, PipelineStep.SCENARIO, PipelineStep.STORYBOARD]
+        state = initialize_state("planning-project", step_order=step_order)
+
+        assert list(state.steps.keys()) == step_order
+        assert PipelineStep.ASSET not in state.steps
+
+
 class TestLoadState:
     """load_state のテスト."""
 

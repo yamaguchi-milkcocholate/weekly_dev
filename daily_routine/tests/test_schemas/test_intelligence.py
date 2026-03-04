@@ -60,3 +60,20 @@ class TestTrendReport:
         assert restored.keyword == report.keyword
         assert restored.scene_structure.total_scenes == report.scene_structure.total_scenes
         assert restored.audio_trend.bpm_range == report.audio_trend.bpm_range
+
+
+class TestAudioTrendDefaultFromScenario:
+    """AudioTrend.default_from_scenario のテスト."""
+
+    def test_デフォルト値で生成(self) -> None:
+        audio_trend = AudioTrend.default_from_scenario("ポップで明るいBGM")
+        assert audio_trend.bpm_range == [100, 130]
+        assert audio_trend.genres == []
+        assert audio_trend.volume_patterns == ["consistent"]
+        assert audio_trend.se_usage_points == []
+
+    def test_有効なAudioTrendインスタンス(self) -> None:
+        audio_trend = AudioTrend.default_from_scenario("")
+        data = audio_trend.model_dump(mode="json")
+        restored = AudioTrend(**data)
+        assert restored.bpm_range == audio_trend.bpm_range

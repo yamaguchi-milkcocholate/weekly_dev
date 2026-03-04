@@ -73,7 +73,9 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
         """全カットのキーフレーム画像を生成する."""
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        if not assets.characters:
+        all_cuts_preview = [cut for scene in storyboard.scenes for cut in scene.cuts]
+        has_any_character_cut = any(cut.has_character for cut in all_cuts_preview)
+        if has_any_character_cut and not assets.characters:
             msg = "キャラクターアセットが存在しません"
             raise ValueError(msg)
 
@@ -90,7 +92,7 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
             spec = keyframe_mapping.get_spec(cut.scene_number) if keyframe_mapping else None
 
             # コンポーネント解決
-            resolved = self._resolve_components(assets, spec)
+            resolved = self._resolve_components(assets, spec, require_character=cut.has_character)
 
             # 環境解決: マッピング指定（description 検索）→ scene_number 検索
             env_image = self._resolve_environment(assets, cut.scene_number, spec)
@@ -138,22 +140,23 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
         return assets.model_copy(update={"keyframes": keyframes})
 
     @staticmethod
-    def _resolve_components(assets: AssetSet, spec: SceneKeyframeSpec | None) -> ResolvedComponents:
+    def _resolve_components(
+        assets: AssetSet, spec: SceneKeyframeSpec | None, *, require_character: bool = True
+    ) -> ResolvedComponents:
         """spec.components をイテレートしてコンポーネントを解決する."""
         resolved = ResolvedComponents()
 
         if not spec or not spec.components:
-            # コンポーネント未指定 → デフォルト（先頭キャラクター）
-            char = assets.characters[0]
-            resolved.char_images.append(char.front_view)
-            resolved.identity_blocks.append(char.identity_block)
+            # コンポーネント未指定 → デフォルト（先頭キャラクター、require_character=True の場合のみ）
+            if require_character:
+                char = assets.characters[0]
+                resolved.char_images.append(char.front_view)
+                resolved.identity_blocks.append(char.identity_block)
             return resolved
 
         for component in spec.components:
             if isinstance(component, CharacterComponent):
-                char = GeminiKeyframeEngine._find_character_asset(
-                    assets, component.character, component.variant_id
-                )
+                char = GeminiKeyframeEngine._find_character_asset(assets, component.character, component.variant_id)
                 resolved.char_images.append(char.front_view)
                 resolved.identity_blocks.append(char.identity_block)
             elif isinstance(component, ReferenceComponent):
@@ -167,8 +170,8 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
                     )
                 )
 
-        # キャラクターが1つも解決されなかった場合、デフォルトを使用
-        if not resolved.char_images:
+        # require_character=True のときのみデフォルトフォールバック
+        if require_character and not resolved.char_images:
             char = assets.characters[0]
             resolved.char_images.append(char.front_view)
             resolved.identity_blocks.append(char.identity_block)

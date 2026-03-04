@@ -19,7 +19,7 @@ from daily_routine.schemas.project import (
 
 logger = logging.getLogger(__name__)
 
-STEP_ORDER: list[PipelineStep] = [
+FULL_STEP_ORDER: list[PipelineStep] = [
     PipelineStep.INTELLIGENCE,
     PipelineStep.SCENARIO,
     PipelineStep.STORYBOARD,
@@ -29,6 +29,21 @@ STEP_ORDER: list[PipelineStep] = [
     PipelineStep.AUDIO,
     PipelineStep.POST_PRODUCTION,
 ]
+
+PLANNING_STEP_ORDER: list[PipelineStep] = [
+    PipelineStep.INTELLIGENCE,
+    PipelineStep.SCENARIO,
+    PipelineStep.STORYBOARD,
+]
+
+PRODUCTION_STEP_ORDER: list[PipelineStep] = [
+    PipelineStep.ASSET,
+    PipelineStep.KEYFRAME,
+    PipelineStep.VISUAL,
+    PipelineStep.AUDIO,
+]
+
+STEP_ORDER = FULL_STEP_ORDER
 
 
 async def run_pipeline(
@@ -101,7 +116,7 @@ async def resume_pipeline(
     step_state.status = CheckpointStatus.APPROVED
     step_state.completed_at = datetime.now()
 
-    next_step = _get_next_step(current_step)
+    next_step = _get_next_step(current_step, state)
     if next_step is None:
         # 最終ステップを承認 → パイプライン完了
         state.completed = True
@@ -263,9 +278,15 @@ def _build_input(
         assets = create_engine(PipelineStep.KEYFRAME).load_output(project_dir)
         return VisualInput(scenario=scenario, storyboard=storyboard, assets=assets)
     elif step == PipelineStep.AUDIO:
-        trend_report = create_engine(PipelineStep.INTELLIGENCE).load_output(project_dir)
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
-        return AudioInput(audio_trend=trend_report.audio_trend, scenario=scenario)
+        try:
+            trend_report = create_engine(PipelineStep.INTELLIGENCE).load_output(project_dir)
+            audio_trend = trend_report.audio_trend
+        except FileNotFoundError:
+            from daily_routine.schemas.intelligence import AudioTrend
+
+            audio_trend = AudioTrend.default_from_scenario(scenario.bgm_direction)
+        return AudioInput(audio_trend=audio_trend, scenario=scenario)
     elif step == PipelineStep.POST_PRODUCTION:
         scenario = create_engine(PipelineStep.SCENARIO).load_output(project_dir)
         storyboard = create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
@@ -277,26 +298,28 @@ def _build_input(
     raise ValueError(msg)
 
 
-def _get_next_step(step: PipelineStep) -> PipelineStep | None:
-    """指定ステップの次のステップを取得する."""
+def _get_next_step(step: PipelineStep, state: PipelineState) -> PipelineStep | None:
+    """指定ステップの次のステップをstateのステップ順序から取得する."""
+    step_list = list(state.steps.keys())
     try:
-        idx = STEP_ORDER.index(step)
+        idx = step_list.index(step)
     except ValueError:
         return None
-    if idx + 1 >= len(STEP_ORDER):
+    if idx + 1 >= len(step_list):
         return None
-    return STEP_ORDER[idx + 1]
+    return step_list[idx + 1]
 
 
-def _get_previous_step(step: PipelineStep) -> PipelineStep | None:
-    """指定ステップの前のステップを取得する."""
+def _get_previous_step(step: PipelineStep, state: PipelineState) -> PipelineStep | None:
+    """指定ステップの前のステップをstateのステップ順序から取得する."""
+    step_list = list(state.steps.keys())
     try:
-        idx = STEP_ORDER.index(step)
+        idx = step_list.index(step)
     except ValueError:
         return None
     if idx == 0:
         return None
-    return STEP_ORDER[idx - 1]
+    return step_list[idx - 1]
 
 
 def _engine_kwargs(step: PipelineStep, api_keys: dict[str, str] | None) -> dict[str, str]:
@@ -422,7 +445,11 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
             pose=pose,
             components=components,
         )
-        scenes.append(spec.model_dump(mode="json", exclude_defaults=True))
+        # exclude_defaults だと components 内の type フィールド（discriminator）も除外されるため
+        # components は個別にシリアライズする
+        dumped = spec.model_dump(mode="json", exclude={"components"}, exclude_defaults=True)
+        dumped["components"] = [c.model_dump(mode="json") for c in components]
+        scenes.append(dumped)
 
     mapping_data = {"scenes": scenes}
     mapping_path.parent.mkdir(parents=True, exist_ok=True)
@@ -431,3 +458,95 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
         encoding="utf-8",
     )
     logger.info("keyframe_mapping.yaml を自動生成しました: %s", mapping_path)
+
+
+def _validate_production_prerequisites(project_dir: Path) -> None:
+    """プロダクション実行の前提条件を検証する.
+
+    scenario.json と storyboard.json の存在を確認する。
+
+    Args:
+        project_dir: プロジェクトデータディレクトリ
+
+    Raises:
+        InvalidStateError: 必要なファイルが存在しない場合
+    """
+    missing: list[str] = []
+    try:
+        create_engine(PipelineStep.SCENARIO).load_output(project_dir)
+    except FileNotFoundError:
+        missing.append("scenario")
+    try:
+        create_engine(PipelineStep.STORYBOARD).load_output(project_dir)
+    except FileNotFoundError:
+        missing.append("storyboard")
+
+    if missing:
+        msg = f"プロダクション実行に必要なファイルが見つかりません: {', '.join(missing)}"
+        raise InvalidStateError(msg)
+
+
+async def run_production_pipeline(
+    project_dir: Path,
+    project_id: str,
+    api_keys: dict[str, str] | None = None,
+) -> PipelineState:
+    """プロダクションパイプラインを実行する（ASSETから開始）.
+
+    scenario.json / storyboard.json が事前に配置されている前提で、
+    ASSET → KEYFRAME → VISUAL → AUDIO のステップのみを初期化・実行する。
+
+    Args:
+        project_dir: プロジェクトデータディレクトリ
+        project_id: プロジェクトID
+        api_keys: APIキーの辞書
+
+    Returns:
+        実行後のPipelineState
+
+    Raises:
+        InvalidStateError: scenario / storyboard が存在しない場合
+    """
+    _validate_production_prerequisites(project_dir)
+
+    state = initialize_state(project_id, step_order=PRODUCTION_STEP_ORDER)
+    save_state(project_dir, state)
+
+    first_step = PRODUCTION_STEP_ORDER[0]
+    engine = create_engine(first_step, **_engine_kwargs(first_step, api_keys))
+    input_data = _build_input(first_step, project_dir)
+
+    state = await _execute_step(state, first_step, engine, input_data, project_dir)
+    return state
+
+
+async def run_planning_pipeline(
+    project_dir: Path,
+    project_id: str,
+    keyword: str,
+    api_keys: dict[str, str] | None = None,
+    seed_videos: list[SeedVideo] | None = None,
+) -> PipelineState:
+    """プランニングパイプラインを実行する（INTELLIGENCEから開始）.
+
+    INTELLIGENCE → SCENARIO → STORYBOARD のステップのみを初期化・実行する。
+
+    Args:
+        project_dir: プロジェクトデータディレクトリ
+        project_id: プロジェクトID
+        keyword: 検索キーワード
+        api_keys: APIキーの辞書
+        seed_videos: ユーザー提供のシード動画情報リスト
+
+    Returns:
+        実行後のPipelineState
+    """
+    state = initialize_state(project_id, step_order=PLANNING_STEP_ORDER)
+    save_state(project_dir, state)
+
+    first_step = PLANNING_STEP_ORDER[0]
+    engine = create_engine(first_step, **_engine_kwargs(first_step, api_keys))
+    input_data = _build_input(first_step, project_dir, keyword, seed_videos=seed_videos)
+
+    state = await _execute_step(state, first_step, engine, input_data, project_dir)
+    return state

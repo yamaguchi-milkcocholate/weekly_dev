@@ -137,6 +137,20 @@ carrying a leather bag, afternoon sunlight casting long diagonal shadows.
 Full body shot, slight low angle, cinematic depth of field.
 ```
 
+#### キャラクター不在カット（has_character=false）の良い例
+
+```
+Freshly roasted coffee beans scattered on a rustic wooden surface,
+steam rising from a ceramic pour-over dripper, warm directional lighting,
+extreme close-up, shallow depth of field, rich brown and amber tones.
+```
+
+```
+A leather-bound notebook lies open on a minimalist desk in @location,
+fountain pen resting across the pages, soft diffused light from a nearby window,
+overhead shot, film grain, muted earth tones.
+```
+
 #### 避けるべきパターン
 
 ```
@@ -165,7 +179,8 @@ Full body shot, slight low angle, cinematic depth of field.
 3. 全カットの合計尺が total_duration_sec と**正確に一致**すること
 4. **1カットの尺は必ず 2〜5秒の整数値（2, 3, 4, 5 のいずれか）。1秒や6秒以上は絶対に不可**
 5. 1カットのアクションは1つまで。複雑な動作は複数カットに分割する
-6. keyframe_prompt には必ず @char タグを使用してキャラクターを参照する（例外なし）
+6. `has_character=true` のカットでは keyframe_prompt に必ず @char タグを使用してキャラクターを参照する
+   `has_character=false` のカットでは @char タグを使わず、環境・物体のみを描写する
 7. motion_prompt は英語、action_description は日本語
 8. **action_description ではキャラクター名（日本語名）を使う。@char タグは使わない**（例: 「彩花がコーヒーを飲む」）
 9. motion_prompt に被写体の外見・服装・場所の説明を含めない（キーフレーム画像に反映済み）

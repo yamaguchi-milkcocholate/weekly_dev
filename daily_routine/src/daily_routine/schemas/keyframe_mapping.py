@@ -16,6 +16,7 @@ class ReferencePurpose(StrEnum):
     BACKGROUND = "background"
     INTERACTION = "interaction"
     GENERAL = "general"
+    SUBJECT = "subject"  # シーンの主体オブジェクト（キャラクター非依存）
 
 
 class CharacterComponent(BaseModel):
@@ -62,13 +63,9 @@ class SceneKeyframeSpec(BaseModel):
 
         migrated: list[CharacterComponent | ReferenceComponent] = []
         if self.character:
-            migrated.append(
-                CharacterComponent(character=self.character, variant_id=self.variant_id)
-            )
+            migrated.append(CharacterComponent(character=self.character, variant_id=self.variant_id))
         if self.reference_image or self.reference_text:
-            migrated.append(
-                ReferenceComponent(image=self.reference_image, text=self.reference_text)
-            )
+            migrated.append(ReferenceComponent(image=self.reference_image, text=self.reference_text))
         if migrated:
             self.components = migrated
 

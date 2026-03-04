@@ -12,7 +12,7 @@ argument-hint: <プロジェクトID>
 
 このスキルを実行する前に、以下のファイルを読み込むこと:
 
-- [/docs/procedures/project_setup.md](/docs/procedures/project_setup.md) — セットアップ手順書（特にセクション2.4）
+- [/docs/procedures/project_setup.md](/docs/procedures/project_setup.md) — セットアップ手順書（特にセクション2.4〜2.6）
 
 ## 入力
 
@@ -20,11 +20,17 @@ $ARGUMENTS
 
 プロジェクトID（例: `my-project-001`）。指定がない場合は `AskUserQuestion` でヒアリングする。
 
-## パイプラインのステップ順序
+## パイプラインモード
 
-```
-1. Intelligence → 2. Scenario → 3. Storyboard → 4. Asset → 5. Keyframe → 6. Visual → 7. Audio → 8. Post-Production
-```
+パイプラインは3つのモードで動作する。モードによってステップ構成が異なる:
+
+| モード | ステップ構成 | 開始コマンド |
+|--------|-------------|-------------|
+| **Full** | Intelligence → Scenario → Storyboard → Asset → Keyframe → Visual → Audio → Post-Production | `run` |
+| **Planning** | Intelligence → Scenario → Storyboard | `plan` |
+| **Production** | Asset → Keyframe → Visual → Audio | `produce` |
+
+現在のモードは `state.yaml` の `steps` キーに含まれるステップから判別する。`resume` コマンドは全モード共通で動作する。
 
 ## 実行手順
 
@@ -33,13 +39,17 @@ $ARGUMENTS
 1. 引数でプロジェクトIDが指定されていない場合、`AskUserQuestion` で入力を求める
 2. `uv run daily-routine status {project_id}` を実行し、現在の状態を取得する
 3. `state.yaml` を読み込み、現在のステップと状態を特定する
+4. **パイプラインモードを判別する**:
+   - `steps` に `intelligence` が含まれ、`asset` も含まれる → Full モード
+   - `steps` に `intelligence` が含まれ、`asset` が含まれない → Planning モード
+   - `steps` に `intelligence` が含まれず、`asset` が含まれる → Production モード
 
 状態に応じて分岐する:
 
 - **AWAITING_REVIEW**: ステップ別のレビューガイドへ進む（ステップ2）
-- **ERROR**: エラー対応を案内する（ステップ6）
-- **COMPLETED**: 全パイプライン完了を案内して終了
-- **IN_PROGRESS**: 実行中であることを案内して終了
+- **ERROR**: エラー対応を案内する（ステップ7）
+- **COMPLETED**: パイプライン完了を案内する（ステップ6b）
+- **RUNNING**: 実行中であることを案内して終了
 
 ### 2. 完了ステップのレビューガイド
 
@@ -64,8 +74,9 @@ $ARGUMENTS
 
 1. `storyboard/` ディレクトリ内のデータを読み込む
 2. ストーリーボードの概要を提示する
-3. **重要:** 次の Asset ステップに進む前に準備が必要であることを説明する
-4. Asset ステップの準備作業へ案内する（ステップ3, 4）
+3. **モードに応じた分岐:**
+   - **Full モード**: 次の Asset ステップに進む前に準備が必要であることを説明し、ステップ3（Asset 準備）へ案内する
+   - **Planning モード**: これがプランニングの最終ステップであることを説明し、ステップ6b（完了案内）へ進む
 
 #### Asset ステップ完了後
 
@@ -89,11 +100,13 @@ $ARGUMENTS
 
 1. `audio/` ディレクトリ内のファイルを確認する
 2. BGM・SE の一覧を提示する
-3. `AskUserQuestion` で確認: 「音声素材を確認して、最終ステップ（Post-Production）に進みますか？」
+3. **モードに応じた分岐:**
+   - **Full モード**: `AskUserQuestion` で確認: 「音声素材を確認して、最終ステップ（Post-Production）に進みますか？」
+   - **Production モード**: これがプロダクションの最終ステップであることを説明し、ステップ6b（完了案内）へ進む
 
 ### 3. Asset ステップの準備: キャラクター参照画像（mapping.yaml）
 
-Storyboard ステップ完了後、Asset ステップに進む前に実施する。
+Storyboard ステップ完了後（Full モード）、または Production モード開始前に実施する。
 
 `AskUserQuestion` でキャラクター参照画像の設定方法を確認する:
 
@@ -204,6 +217,28 @@ environments:
    - 次が Asset ステップの場合: 「mapping.yaml と environment_seeds.yaml の準備が必要です」
 4. 「確認後、再度 `/checkpoint-resume {project_id}` で次のステップに進めます」と案内する
 
+### 6b. パイプライン完了時の案内
+
+最終ステップの approve でパイプラインが完了した場合、モードに応じた案内を行う:
+
+#### Full モード
+
+- 「パイプラインが完了しました」と報告する
+- 最終出力の確認方法を案内する
+
+#### Planning モード
+
+- 「プランニングが完了しました」と報告する
+- 以下の次のアクションを案内する:
+  - `scenario/scenario.json` と `storyboard/storyboard.json` を手動編集できること
+  - 編集後、`uv run daily-routine produce {project_id}` でプロダクションパイプラインを開始できること
+  - `/pipeline-run` で Production モードを選択することもできること
+
+#### Production モード
+
+- 「プロダクションパイプラインが完了しました」と報告する
+- 生成された映像・音声素材の確認方法を案内する
+
 ### 7. エラー対応
 
 `ERROR` 状態の場合:
@@ -220,3 +255,4 @@ environments:
 - 参照画像は人物が写り込んでいてもOK（C2-R2 が自動で除去する）
 - 同じ参照画像を複数のシーン/キャラクターで共有できる
 - modification フィールドは英語で記述する（アングル変更、雰囲気変更、オブジェクト追加等）
+- Production モードでは Intelligence 未実行のため、Audio ステップで AudioTrend にデフォルト値が使用される

@@ -89,10 +89,12 @@ class StoryboardValidator:
             if re.search(r"[\u3040-\u30ff\u4e00-\u9fff]", cut.motion_prompt):
                 errors.append(f"{cut.cut_id} の motion_prompt に日本語が含まれています。英語で記述してください")
 
-        # 8. keyframe_prompt に @char タグが含まれること
+        # 8. keyframe_prompt の @char タグチェック（has_character に応じた条件付き）
         for cut in all_cuts:
-            if "@char" not in cut.keyframe_prompt:
-                errors.append(f"{cut.cut_id} の keyframe_prompt に @char タグが含まれていません")
+            if cut.has_character and "@char" not in cut.keyframe_prompt:
+                errors.append(f"{cut.cut_id} の keyframe_prompt に @char タグが含まれていません（has_character=true）")
+            if not cut.has_character and "@char" in cut.keyframe_prompt:
+                errors.append(f"{cut.cut_id} の keyframe_prompt に @char タグが含まれています（has_character=false）")
 
         # 10. action_description に @char タグが含まれないこと
         for cut in all_cuts:

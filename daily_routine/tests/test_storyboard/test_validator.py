@@ -21,6 +21,7 @@ def _make_cut(
     cut_id: str | None = None,
     transition: Transition = Transition.CUT,
     action_description: str = "コーヒーを飲む",
+    has_character: bool = True,
 ) -> CutSpec:
     """テスト用のCutSpecを作成する."""
     if cut_id is None:
@@ -36,6 +37,7 @@ def _make_cut(
         motion_prompt=motion_prompt,
         keyframe_prompt=keyframe_prompt,
         transition=transition,
+        has_character=has_character,
     )
 
 
@@ -275,6 +277,68 @@ class TestStoryboardValidator:
         # シーン1の最初のカットが cut でもエラーにならないことを確認
         assert storyboard.scenes[0].cuts[0].transition == Transition.CUT
         self.validator.validate(storyboard)  # エラーなし
+
+    def test_has_character_false_charタグなし_通過(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=30.0,
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
+                + [
+                    _make_cut(
+                        1,
+                        10,
+                        3.0,
+                        keyframe_prompt="Coffee beans on a wooden table, warm lighting",
+                        has_character=False,
+                    )
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        self.validator.validate(storyboard)
+
+    def test_has_character_false_charタグあり_エラー(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=30.0,
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
+                + [
+                    _make_cut(
+                        1,
+                        10,
+                        3.0,
+                        keyframe_prompt="@char holds coffee beans",
+                        has_character=False,
+                    )
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        with pytest.raises(StoryboardValidationError) as exc_info:
+            self.validator.validate(storyboard)
+        assert any("has_character=false" in e for e in exc_info.value.errors)
+
+    def test_has_character混在_通過(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=30.0,
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
+                + [
+                    _make_cut(
+                        1,
+                        10,
+                        3.0,
+                        keyframe_prompt="Steaming latte on marble counter, soft bokeh",
+                        has_character=False,
+                    )
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        self.validator.validate(storyboard)
 
     def test_複数エラー_全て報告(self) -> None:
         scenes = [

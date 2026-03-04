@@ -11,7 +11,13 @@ from daily_routine.config.manager import GlobalConfig, get_project_dir, init_pro
 from daily_routine.intelligence.base import SceneCapture, SeedVideo
 from daily_routine.logging import setup_logging
 from daily_routine.pipeline.exceptions import InvalidStateError, PipelineError
-from daily_routine.pipeline.runner import resume_pipeline, retry_pipeline, run_pipeline
+from daily_routine.pipeline.runner import (
+    resume_pipeline,
+    retry_pipeline,
+    run_pipeline,
+    run_planning_pipeline,
+    run_production_pipeline,
+)
 from daily_routine.pipeline.state import load_state
 from daily_routine.schemas.project import PipelineState
 
@@ -160,6 +166,65 @@ def init(
     config = init_project(global_config, keyword, project_id)
     typer.echo(f"プロジェクトを初期化しました: {config.project_id}")
     typer.echo(f"データディレクトリ: {global_config.data_root / 'projects' / config.project_id}")
+
+
+@app.command()
+def plan(
+    keyword: str = typer.Argument(help="検索キーワード"),
+    project_id: str | None = typer.Option(None, help="プロジェクトID（省略時は自動生成）"),
+    seeds: Path | None = typer.Option(None, help="シード動画情報のYAMLファイルパス"),
+) -> None:
+    """プランニングのみ実行する（Intelligence → Scenario → Storyboard）.
+
+    プロジェクトを初期化し、プランニングステップのみを実行する。
+    """
+    global_config = load_global_config()
+    project_config = init_project(global_config, keyword, project_id)
+    project_dir = get_project_dir(global_config, project_config.project_id)
+
+    seed_videos = _load_seeds(seeds) if seeds else None
+
+    try:
+        api_keys = _build_api_keys(global_config)
+        state = asyncio.run(
+            run_planning_pipeline(
+                project_dir,
+                project_config.project_id,
+                keyword,
+                api_keys=api_keys,
+                seed_videos=seed_videos,
+            )
+        )
+        _print_state_summary(state)
+    except PipelineError as e:
+        typer.echo(f"エラー: {e}", err=True)
+        raise typer.Exit(code=1) from e
+
+
+@app.command()
+def produce(
+    project_id: str = typer.Argument(help="プロジェクトID"),
+) -> None:
+    """プロダクションパイプラインを実行する（ASSET から開始）.
+
+    事前に scenario / storyboard が配置されている必要がある。
+    """
+    global_config = load_global_config()
+    project_dir = get_project_dir(global_config, project_id)
+
+    try:
+        api_keys = _build_api_keys(global_config)
+        state = asyncio.run(
+            run_production_pipeline(
+                project_dir,
+                project_id,
+                api_keys=api_keys,
+            )
+        )
+        _print_state_summary(state)
+    except PipelineError as e:
+        typer.echo(f"エラー: {e}", err=True)
+        raise typer.Exit(code=1) from e
 
 
 def _build_api_keys(global_config: GlobalConfig) -> dict[str, str]:

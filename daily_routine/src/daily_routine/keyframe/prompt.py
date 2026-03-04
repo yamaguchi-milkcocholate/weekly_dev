@@ -37,6 +37,7 @@ _IMAGE_DESC_BY_PURPOSE: dict[str, str] = {
     "background": "Image {idx} shows a background object: {text}.",
     "interaction": "Image {idx} shows an object the character is using/interacting with: {text}.",
     "general": "Image {idx} shows additional reference: {text}.",
+    "subject": "Image {idx} shows the main subject: {text}.",
 }
 
 # purpose → 明示的指示テンプレート
@@ -47,6 +48,7 @@ _INSTRUCTION_BY_PURPOSE: dict[str, str] = {
     "background": "Place '{text}' in the background/environment as shown in the reference image.",
     "interaction": "The character MUST be actively using/interacting with '{text}' as shown in the reference image.",
     "general": "Refer to '{text}' for additional context.",
+    "subject": "'{text}' MUST be prominently featured as shown in the reference image.",
 }
 
 
@@ -77,19 +79,19 @@ def build_flash_meta_prompt(
     image_desc = _build_image_description(num_char_images, has_env_image, infos, num_reference_images)
     lines.append(f"Analyze all images carefully.\n{image_desc}")
 
-    lines.append(
-        "Generate an image generation prompt that places the character(s) "
-        "naturally in this environment."
-    )
+    if identity_blocks:
+        lines.append("Generate an image generation prompt that places the character(s) naturally in this environment.")
 
-    # Identity Block を全員分列挙
-    if len(identity_blocks) == 1:
-        lines.append(f"The character is: {identity_blocks[0]}")
+        # Identity Block を全員分列挙
+        if len(identity_blocks) == 1:
+            lines.append(f"The character is: {identity_blocks[0]}")
+        else:
+            for i, block in enumerate(identity_blocks, start=1):
+                lines.append(f"Character {i} is: {block}")
+
+        lines.append(f"The character's pose: {pose_instruction}")
     else:
-        for i, block in enumerate(identity_blocks, start=1):
-            lines.append(f"Character {i} is: {block}")
-
-    lines.append(f"The character's pose: {pose_instruction}")
+        lines.append("Generate an image generation prompt that composes these elements naturally in this environment.")
 
     # 参照指示を追加
     ref_instructions = _build_reference_instructions(infos)
@@ -126,8 +128,9 @@ def build_generation_prompt(
     lines.append(image_desc)
     lines.append(flash_prompt)
 
-    # 単一キャラクター時のみ solo 制約を付与
-    if num_char_images <= 1:
+    if num_char_images == 0:
+        lines.append("No people or characters. Photo-realistic, natural lighting.")
+    elif num_char_images <= 1:
         lines.append("Single person only, solo. Photo-realistic, natural lighting.")
     else:
         lines.append("Photo-realistic, natural lighting.")

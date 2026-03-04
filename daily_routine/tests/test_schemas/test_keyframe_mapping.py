@@ -34,7 +34,7 @@ class TestReferencePurpose:
     """ReferencePurpose のテスト."""
 
     def test_全値パース(self) -> None:
-        expected = {"wearing", "holding", "atmosphere", "background", "interaction", "general"}
+        expected = {"wearing", "holding", "atmosphere", "background", "interaction", "general", "subject"}
         actual = {p.value for p in ReferencePurpose}
         assert actual == expected
 
