@@ -1,3 +1,6 @@
 video_ai/frames/**
 video_ai/generated/**
 seamless/generated/**
+seamless/reference/**
+keyframe_no_char_verify_output/**
+keyframe_style_continuity_output/**

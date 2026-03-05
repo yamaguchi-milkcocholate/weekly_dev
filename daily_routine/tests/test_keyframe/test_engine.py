@@ -797,3 +797,308 @@ class TestItemSupport:
         assert len(result.keyframes) == 2
         assert result.keyframes[0].cut_id == "scene_01_cut_01"
         assert result.keyframes[1].cut_id == "scene_02_cut_01"
+
+
+def _make_style_continuity_storyboard() -> Storyboard:
+    """スタイル連続性テスト用: 4カット / 3シーン / 2環境."""
+    return Storyboard(
+        title="スタイル連続性テスト",
+        total_duration_sec=12.0,
+        total_cuts=4,
+        scenes=[
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=3.0,
+                cuts=[
+                    CutSpec(
+                        cut_id="scene_01_cut_01",
+                        scene_number=1,
+                        cut_number=1,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="slow zoom-in",
+                        action_description="朝の部屋",
+                        motion_prompt="@char wakes up",
+                        keyframe_prompt="@char in bedroom",
+                        transition=Transition.CUT,
+                    ),
+                ],
+            ),
+            SceneStoryboard(
+                scene_number=2,
+                scene_duration_sec=3.0,
+                cuts=[
+                    CutSpec(
+                        cut_id="scene_02_cut_01",
+                        scene_number=2,
+                        cut_number=1,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.MODERATE,
+                        camera_work="pan left",
+                        action_description="カフェに到着",
+                        motion_prompt="@char walks in",
+                        keyframe_prompt="@char at cafe",
+                        transition=Transition.CUT,
+                    ),
+                ],
+            ),
+            SceneStoryboard(
+                scene_number=3,
+                scene_duration_sec=6.0,
+                cuts=[
+                    CutSpec(
+                        cut_id="scene_03_cut_01",
+                        scene_number=3,
+                        cut_number=1,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="close-up",
+                        action_description="部屋に戻る",
+                        motion_prompt="@char sits down",
+                        keyframe_prompt="@char in bedroom evening",
+                        transition=Transition.CUT,
+                    ),
+                    CutSpec(
+                        cut_id="scene_03_cut_02",
+                        scene_number=3,
+                        cut_number=2,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="slow zoom-out",
+                        action_description="部屋でリラックス",
+                        motion_prompt="@char relaxes",
+                        keyframe_prompt="@char relaxing in bedroom",
+                        transition=Transition.CUT,
+                    ),
+                ],
+            ),
+        ],
+    )
+
+
+def _make_style_continuity_assets(tmp_path: Path) -> tuple[AssetSet, Path, Path]:
+    """スタイル連続性テスト用アセット（2環境: env_a, env_b）を返す."""
+    front_view = tmp_path / "front.png"
+    front_view.write_bytes(b"fake_image")
+    env_a = tmp_path / "env_a.png"
+    env_a.write_bytes(b"env_a")
+    env_b = tmp_path / "env_b.png"
+    env_b.write_bytes(b"env_b")
+
+    assets = AssetSet(
+        characters=[
+            CharacterAsset(
+                character_name="花子",
+                front_view=front_view,
+                identity_block="Young adult female",
+            ),
+        ],
+        environments=[
+            EnvironmentAsset(scene_number=1, image_path=env_a, description="部屋"),
+            EnvironmentAsset(scene_number=2, image_path=env_b, description="カフェ"),
+            EnvironmentAsset(scene_number=3, image_path=env_a, description="部屋"),
+        ],
+    )
+    return assets, env_a, env_b
+
+
+class TestStyleContinuity:
+    """スタイル連続性のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_同一環境の連続カットに前カット参照が注入される(self, tmp_path: Path) -> None:
+        """cut 1,2 は参照なし、cut 3,4 に atmosphere ref が注入される."""
+        output_dir = tmp_path / "keyframes"
+        assets, env_a, env_b = _make_style_continuity_assets(tmp_path)
+        storyboard = _make_style_continuity_storyboard()
+        scenario = _make_scenario()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        # scene 3 の environment は "部屋" → env_a にマッピング
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(scene_number=3, environment="部屋"),
+            ]
+        )
+
+        result = await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+            keyframe_mapping=keyframe_mapping,
+        )
+
+        assert len(result.keyframes) == 4
+
+        # cut 1 (scene 1, env_a): アンカー → 参照なし
+        call1 = client.analyze_scene.call_args_list[0]
+        assert all(info.purpose != "atmosphere" or info.text != _atmosphere_text()
+                   for info in call1.kwargs["reference_infos"])
+
+        # cut 2 (scene 2, env_b): 別環境アンカー → 参照なし
+        call2 = client.analyze_scene.call_args_list[1]
+        assert all(info.purpose != "atmosphere" or info.text != _atmosphere_text()
+                   for info in call2.kwargs["reference_infos"])
+
+        # cut 3 (scene 3, env_a): scene 1 の env_a を参照
+        call3 = client.analyze_scene.call_args_list[2]
+        atmo_refs3 = [info for info in call3.kwargs["reference_infos"] if info.text == _atmosphere_text()]
+        assert len(atmo_refs3) == 1
+        assert atmo_refs3[0].purpose == "atmosphere"
+        assert atmo_refs3[0].has_image is True
+
+        # cut 4 (scene 3 cut 2, env_a): scene 3 cut 1 を参照
+        call4 = client.analyze_scene.call_args_list[3]
+        atmo_refs4 = [info for info in call4.kwargs["reference_infos"] if info.text == _atmosphere_text()]
+        assert len(atmo_refs4) == 1
+
+    @pytest.mark.asyncio
+    async def test_異なる環境のカットには前カット参照が注入されない(self, tmp_path: Path) -> None:
+        """env_a と env_b 間でクロス参照が発生しない."""
+        output_dir = tmp_path / "keyframes"
+        assets, env_a, env_b = _make_style_continuity_assets(tmp_path)
+        # 2カットのみ: scene 1 (env_a), scene 2 (env_b)
+        storyboard = Storyboard(
+            title="テスト",
+            total_duration_sec=6.0,
+            total_cuts=2,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="zoom-in",
+                            action_description="部屋",
+                            motion_prompt="@char moves",
+                            keyframe_prompt="@char in room",
+                            transition=Transition.CUT,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=2,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_02_cut_01",
+                            scene_number=2,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.MODERATE,
+                            camera_work="pan",
+                            action_description="カフェ",
+                            motion_prompt="@char walks",
+                            keyframe_prompt="@char at cafe",
+                            transition=Transition.CUT,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        scenario = _make_scenario()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        # どちらのカットにも atmosphere スタイル連続性参照がない
+        for call in client.analyze_scene.call_args_list:
+            assert all(info.text != _atmosphere_text() for info in call.kwargs["reference_infos"])
+
+    @pytest.mark.asyncio
+    async def test_環境なしカットにはスタイル連続性スキップ(self, tmp_path: Path) -> None:
+        """env_image=None のカットはグルーピング対象外."""
+        output_dir = tmp_path / "keyframes"
+        assets = _make_assets(tmp_path)  # environments 未設定
+        scenario = _make_scenario()
+        storyboard = _make_storyboard()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+        )
+
+        # 環境なし → スタイル連続性参照は注入されない
+        for call in client.analyze_scene.call_args_list:
+            assert all(info.text != _atmosphere_text() for info in call.kwargs["reference_infos"])
+
+    @pytest.mark.asyncio
+    async def test_execute_item_前カット参照が注入される(self, tmp_path: Path) -> None:
+        """既存キーフレームがある状態で execute_item が前カット参照を注入する."""
+        from daily_routine.schemas.asset import KeyframeAsset
+        from daily_routine.schemas.pipeline_io import KeyframeInput
+
+        assets, env_a, env_b = _make_style_continuity_assets(tmp_path)
+        storyboard = _make_style_continuity_storyboard()
+        scenario = _make_scenario()
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(scene_number=3, environment="部屋"),
+            ]
+        )
+
+        # scene_01_cut_01 の既存キーフレームを作成
+        kf_dir = tmp_path / "assets" / "keyframes"
+        kf_dir.mkdir(parents=True, exist_ok=True)
+        existing_kf = kf_dir / "scene_01_cut_01.png"
+        existing_kf.write_bytes(b"existing_keyframe")
+
+        assets_with_kf = assets.model_copy(
+            update={
+                "keyframes": [
+                    KeyframeAsset(
+                        scene_number=1,
+                        image_path=existing_kf,
+                        prompt="existing prompt",
+                        cut_id="scene_01_cut_01",
+                        generation_method="gemini",
+                    ),
+                ],
+            }
+        )
+
+        # AssetSet を保存（execute_item が load_output で読み込む）
+        engine.save_output(tmp_path, assets_with_kf)
+
+        input_data = KeyframeInput(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            keyframe_mapping=keyframe_mapping,
+        )
+
+        # scene_03_cut_01 を生成: scene 1 (env_a) のキーフレームが参照される
+        await engine.execute_item("scene_03_cut_01", input_data, tmp_path)
+
+        # analyze_scene に atmosphere 参照が渡されている
+        call = client.analyze_scene.call_args_list[0]
+        atmo_refs = [info for info in call.kwargs["reference_infos"] if info.text == _atmosphere_text()]
+        assert len(atmo_refs) == 1
+        assert existing_kf in call.kwargs["reference_images"]
+
+
+def _atmosphere_text() -> str:
+    """スタイル連続性参照のテキストを返す（テストのアサーション用）."""
+    from daily_routine.keyframe.engine import _STYLE_CONTINUITY_REF
+
+    return _STYLE_CONTINUITY_REF.text

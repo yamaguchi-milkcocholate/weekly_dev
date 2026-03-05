@@ -14,13 +14,21 @@ from daily_routine.schemas.keyframe_mapping import (
 )
 from daily_routine.schemas.pipeline_io import KeyframeInput
 from daily_routine.schemas.scenario import Scenario
-from daily_routine.schemas.storyboard import Storyboard
+from daily_routine.schemas.storyboard import CutSpec, Storyboard
 
 from .base import KeyframeEngineBase
 from .client import GeminiKeyframeClient
 from .prompt import ReferenceInfo
 
 logger = logging.getLogger(__name__)
+
+_STYLE_CONTINUITY_REF = ReferenceInfo(
+    purpose="atmosphere",
+    text="Previous cut from the same location. "
+         "Match the color palette, lighting tone, "
+         "and overall visual atmosphere.",
+    has_image=True,
+)
 
 
 @dataclass
@@ -83,6 +91,7 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
         total_cuts = len(all_cuts)
 
         keyframes: list[KeyframeAsset] = []
+        prev_keyframe_by_env: dict[Path, Path] = {}
         for i, cut in enumerate(all_cuts, start=1):
             keyframe_path = output_dir / f"{cut.cut_id}.png"
 
@@ -96,6 +105,14 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
 
             # 環境解決: マッピング指定（description 検索）→ scene_number 検索
             env_image = self._resolve_environment(assets, cut.scene_number, spec)
+
+            # スタイル連続性: 同一環境の前カット参照を注入
+            if env_image is not None and env_image in prev_keyframe_by_env:
+                prev_kf = prev_keyframe_by_env[env_image]
+                if prev_kf.exists():
+                    resolved.reference_images.append(prev_kf)
+                    resolved.reference_infos.append(_STYLE_CONTINUITY_REF)
+                    logger.info("  スタイル連続性: 前カット参照を注入 (%s)", prev_kf.name)
 
             # ポーズ取得
             pose_instruction = cut.pose_instruction
@@ -124,6 +141,10 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
                 reference_infos=resolved.reference_infos,
                 output_path=keyframe_path,
             )
+
+            # スタイル連続性: 生成結果をトラッキング更新
+            if env_image is not None:
+                prev_keyframe_by_env[env_image] = result_path
 
             keyframes.append(
                 KeyframeAsset(
@@ -219,6 +240,44 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
                 return env.image_path
         return None
 
+    def _find_previous_keyframe_same_env(
+        self,
+        target_cut: CutSpec,
+        storyboard: Storyboard,
+        assets: AssetSet,
+        keyframe_mapping: KeyframeMapping | None,
+    ) -> Path | None:
+        """同一環境の直前キーフレームを検索する（execute_item 用）."""
+        # 対象カットの環境を解決
+        spec = keyframe_mapping.get_spec(target_cut.scene_number) if keyframe_mapping else None
+        target_env = self._resolve_environment(assets, target_cut.scene_number, spec)
+        if target_env is None:
+            return None
+
+        # 全カットを順序通りに取得し、対象カットのインデックスを特定
+        all_cuts: list[CutSpec] = [cut for scene in storyboard.scenes for cut in scene.cuts]
+        target_idx: int | None = None
+        for i, cut in enumerate(all_cuts):
+            if cut.cut_id == target_cut.cut_id:
+                target_idx = i
+                break
+        if target_idx is None or target_idx == 0:
+            return None
+
+        # 既存キーフレームの cut_id → image_path マップを構築
+        kf_map: dict[str, Path] = {kf.cut_id: kf.image_path for kf in assets.keyframes}
+
+        # インデックスを逆順走査し、同一環境の最も近いキーフレームを返す
+        for i in range(target_idx - 1, -1, -1):
+            prev_cut = all_cuts[i]
+            prev_spec = keyframe_mapping.get_spec(prev_cut.scene_number) if keyframe_mapping else None
+            prev_env = self._resolve_environment(assets, prev_cut.scene_number, prev_spec)
+            if prev_env == target_env and prev_cut.cut_id in kf_map:
+                prev_path = kf_map[prev_cut.cut_id]
+                if prev_path.exists():
+                    return prev_path
+        return None
+
     # --- アイテム単位実行 ---
 
     @property
@@ -260,6 +319,15 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
         spec = input_data.keyframe_mapping.get_spec(target_cut.scene_number) if input_data.keyframe_mapping else None
         resolved = self._resolve_components(assets, spec, require_character=target_cut.has_character)
         env_image = self._resolve_environment(assets, target_cut.scene_number, spec)
+
+        # スタイル連続性: 同一環境の前カット参照を注入
+        prev_kf = self._find_previous_keyframe_same_env(
+            target_cut, input_data.storyboard, assets, input_data.keyframe_mapping
+        )
+        if prev_kf is not None:
+            resolved.reference_images.append(prev_kf)
+            resolved.reference_infos.append(_STYLE_CONTINUITY_REF)
+            logger.info("  スタイル連続性: 前カット参照を注入 (%s)", prev_kf.name)
 
         pose_instruction = target_cut.pose_instruction
         if spec and spec.pose and not pose_instruction:
