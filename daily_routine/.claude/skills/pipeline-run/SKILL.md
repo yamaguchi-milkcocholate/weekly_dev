@@ -30,13 +30,19 @@ $ARGUMENTS
 | **Planning** | `plan` | Intelligence → Scenario → Storyboard | プランニングのみ。後で手動編集 → `produce` で Production に移行 |
 | **Production** | `produce` | Asset → Keyframe → Visual → Audio | コンテンツ非依存のプロダクションのみ。事前に scenario.json + storyboard.json が必要 |
 
+## 個別順次実行方式
+
+パイプラインは各ステップを1つずつ実行し、`AWAITING_REVIEW` で停止するチェックポイント方式で動作する。
+
+さらに、**Asset / Keyframe / Visual** ステップはアイテム単位（キャラクター、シーン、クリップ等）で個別順次実行される。1回の `resume` で1アイテムが処理され、全アイテム完了後に次のステップへ進む。
+
 ## 実行手順
 
 ### 1. 環境の事前チェック
 
 パイプライン実行の前提条件を確認する:
 
-1. `daily_routine/.env` が存在し、APIキーが設定されているか確認する
+1. `.env` が存在し、APIキーが設定されているか確認する
 2. `uv run python -c "import daily_routine; print('OK')"` で依存関係を確認する
 
 問題がある場合は、`/project-setup` スキルの実行を案内して終了する。
@@ -126,7 +132,7 @@ uv run daily-routine produce my-project-001
 
 ### 7. パイプラインの実行
 
-1. 構築したコマンドを `daily_routine/` ディレクトリで実行する
+1. 構築したコマンドを実行する
 2. 実行結果を監視し、エラーが出た場合は原因を特定して対処方法を提示する
 
 ### 8. 実行結果の報告
@@ -139,7 +145,7 @@ uv run daily-routine produce my-project-001
 2. **プロジェクトディレクトリ**: `outputs/projects/{project_id}/` のパス
 3. **現在の状態**: `AWAITING_REVIEW` で停止中であること
 4. `uv run daily-routine status {project_id}` で状態を確認できること
-5. 「確認後、`/checkpoint-resume {project_id}` で次のステップに進めます」と案内する
+5. 「確認後、`/checkpoint-resume {project_id}` で次に進めます」と案内する
 
 #### Full / Planning モード
 
@@ -148,12 +154,16 @@ uv run daily-routine produce my-project-001
 
 #### Production モード
 
-- **実行されたステップ**: Asset ステップが完了したこと
-- **作成されたデータ**: `assets/` ディレクトリ内のファイル
+- **実行されたステップ**: Asset ステップの**最初のアイテム**が完了したこと（Asset はアイテム単位で実行されるため、全体が完了したわけではない）
+- **作成されたデータ**: `assets/` ディレクトリ内の該当アイテムのファイル
+- **残りのアイテム**: 未処理のアイテム数を案内する
+- 「`/checkpoint-resume {project_id}` で1アイテムずつ進めます」と案内する
 
 ## 注意事項
 
 - `run` / `plan` コマンドはプロジェクト初期化 + 最初のステップの実行を行う。`init` 単体は使わない（Production モード除く）
 - Production モードでは `init` で事前にプロジェクトを作成し、scenario.json + storyboard.json を手動配置してから `produce` を実行する
+- `produce` は `scenario.json` と `storyboard.json` の存在を検証してから開始する
 - 実行に時間がかかる場合があるため、ユーザーに待機を案内する
 - エラーが発生した場合、`uv run daily-routine retry {project_id}` での再試行を案内する
+- アイテム対応ステップ（Asset / Keyframe / Visual）でアイテム個別のエラーには `retry --item <item-id>` を使用する
