@@ -36,8 +36,6 @@ class CharacterAsset(BaseModel):
     character_name: str
     variant_id: str = Field(default="default", description="衣装バリアントID")
     front_view: Path = Field(description="正面画像パス")
-    side_view: Path = Field(description="横向き画像パス")
-    back_view: Path = Field(description="背面画像パス")
     identity_block: str = Field(default="", description="Identity Block テキスト（C1-ID 出力）")
 
 

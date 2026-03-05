@@ -79,24 +79,18 @@ class TestGenerateCharacterModeA:
 
         assert result.character_name == "Aoi"
         assert result.front_view == output_dir / "front.png"
-        assert result.side_view == output_dir / "side.png"
-        assert result.back_view == output_dir / "back.png"
 
-        # 正面はプロンプトのみ（generate）、横・背面は参照画像付き（generate_with_reference）
+        # 正面はプロンプトのみ（generate）
         assert mock_client.generate.call_count == 1
-        # side + back = 2
-        assert mock_client.generate_with_reference.call_count == 2
+        assert mock_client.generate_with_reference.call_count == 0
 
     @pytest.mark.asyncio
-    async def test_generate_character_モードA_参照画像は正面のみ(self, generator, mock_client, character, tmp_path):
+    async def test_generate_character_モードA_generate_with_reference未使用(self, generator, mock_client, character, tmp_path):
         output_dir = tmp_path / "character" / "Aoi"
         await generator.generate_character(character, output_dir)
 
-        # generate_with_reference の全呼び出しで、参照画像は正面画像のみ（1枚）
-        for call_obj in mock_client.generate_with_reference.call_args_list:
-            ref_images = call_obj[0][1]  # positional arg: reference_images
-            assert len(ref_images) == 1
-            assert ref_images[0] == output_dir / "front.png"
+        # 正面のみ生成のため generate_with_reference は呼ばれない
+        assert mock_client.generate_with_reference.call_count == 0
 
 
 class TestGenerateCharacterModeB:
@@ -111,10 +105,9 @@ class TestGenerateCharacterModeB:
 
         await generator.generate_character(character, output_dir, reference_image=ref_image)
 
-        # モードB: 全て generate_with_reference を使用
+        # モードB: 正面のみ generate_with_reference を使用
         assert mock_client.generate.call_count == 0
-        # front + side + back = 3
-        assert mock_client.generate_with_reference.call_count == 3
+        assert mock_client.generate_with_reference.call_count == 1
 
     @pytest.mark.asyncio
     async def test_generate_character_モードB_正面はユーザー画像のみ参照(
@@ -127,37 +120,20 @@ class TestGenerateCharacterModeB:
 
         await generator.generate_character(character, output_dir, reference_image=ref_image)
 
-        # 最初の呼び出し（正面生成）: ユーザー参照画像のみ
+        # 正面生成のみ: ユーザー参照画像1枚
+        assert mock_client.generate_with_reference.call_count == 1
         first_call = mock_client.generate_with_reference.call_args_list[0]
         ref_images = first_call[0][1]
         assert len(ref_images) == 1
         assert ref_images[0] == ref_image
-
-    @pytest.mark.asyncio
-    async def test_generate_character_モードB_横背面はユーザー画像と正面を参照(
-        self, generator, mock_client, character, tmp_path
-    ):
-        output_dir = tmp_path / "character" / "Aoi"
-        ref_image = tmp_path / "reference" / "aoi.png"
-        ref_image.parent.mkdir(parents=True, exist_ok=True)
-        ref_image.write_bytes(b"user-reference")
-
-        await generator.generate_character(character, output_dir, reference_image=ref_image)
-
-        # 2番目以降の呼び出し（横・背面）: ユーザー画像 + 正面画像の2枚
-        for call_obj in mock_client.generate_with_reference.call_args_list[1:]:
-            ref_images = call_obj[0][1]
-            assert len(ref_images) == 2
-            assert ref_images[0] == ref_image
-            assert ref_images[1] == output_dir / "front.png"
 
 
 class TestGenerateCharacterC1F2MA:
     """C1-F2-MA 方式のキャラクター生成テスト."""
 
     @pytest.mark.asyncio
-    async def test_C1F2MA_手動配置_Flash分析2回_Pro生成3回(self, generator, mock_client, character, tmp_path):
-        """person+clothing 指定 → Flash分析2回 + Pro生成3回."""
+    async def test_C1F2MA_手動配置_Flash分析2回_Pro生成1回(self, generator, mock_client, character, tmp_path):
+        """person+clothing 指定 → Flash分析2回 + Pro生成1回."""
         output_dir = tmp_path / "character" / "Aoi"
         person_img = tmp_path / "person" / "Aoi.png"
         clothing_img = tmp_path / "clothing" / "Aoi.png"
@@ -175,13 +151,11 @@ class TestGenerateCharacterC1F2MA:
 
         assert result.character_name == "Aoi"
         assert result.front_view == output_dir / "front.png"
-        assert result.side_view == output_dir / "side.png"
-        assert result.back_view == output_dir / "back.png"
 
         # Flash 分析: 融合分析1回 + Identity Block抽出1回 = 2回
         assert mock_client.analyze_with_flash.call_count == 2
-        # Pro 生成: front + side + back = 3回
-        assert mock_client.generate_with_reference.call_count == 3
+        # Pro 生成: front のみ = 1回
+        assert mock_client.generate_with_reference.call_count == 1
         # generate（参照なし）は呼ばれない
         assert mock_client.generate.call_count == 0
 
@@ -207,8 +181,8 @@ class TestGenerateCharacterC1F2MA:
         assert "East Asian" in result.identity_block
 
     @pytest.mark.asyncio
-    async def test_C1F2MA_マルチアングル生成_person_clothing参照(self, generator, mock_client, character, tmp_path):
-        """3アングル生成で person+clothing が参照画像として渡されること."""
+    async def test_C1F2MA_正面生成_person_clothing参照(self, generator, mock_client, character, tmp_path):
+        """正面生成で person+clothing が参照画像として渡されること."""
         output_dir = tmp_path / "character" / "Aoi"
         person_img = tmp_path / "person" / "Aoi.png"
         clothing_img = tmp_path / "clothing" / "Aoi.png"
@@ -224,12 +198,13 @@ class TestGenerateCharacterC1F2MA:
             clothing_image=clothing_img,
         )
 
-        # 3回の generate_with_reference は全て MA 生成（person+clothing）
-        for call_obj in mock_client.generate_with_reference.call_args_list:
-            ref_images = call_obj[0][1]
-            assert len(ref_images) == 2
-            assert ref_images[0] == person_img
-            assert ref_images[1] == clothing_img
+        # 1回の generate_with_reference は MA 生成（person+clothing）
+        assert mock_client.generate_with_reference.call_count == 1
+        call_obj = mock_client.generate_with_reference.call_args_list[0]
+        ref_images = call_obj[0][1]
+        assert len(ref_images) == 2
+        assert ref_images[0] == person_img
+        assert ref_images[1] == clothing_img
 
 
 class TestMappingYaml:
@@ -702,6 +677,139 @@ class TestLoadEnvironmentSeeds:
         seeds_path = tmp_path / "nonexistent.yaml"
         with pytest.raises(FileNotFoundError, match="環境シードファイルが見つかりません"):
             generator._load_environment_seeds(seeds_path)
+
+
+class TestItemSupport:
+    """アイテム単位実行のテスト."""
+
+    def test_supports_items_True(self, generator) -> None:
+        assert generator.supports_items is True
+
+    def test_list_items_キャラクターと環境(self, generator, character, tmp_path) -> None:
+        """list_items がキャラクターと環境のアイテムIDを返すこと."""
+        from daily_routine.schemas.scenario import CameraWork, Scenario, SceneSpec
+
+        project_dir = tmp_path / "project"
+        reference_dir = project_dir / "assets" / "reference"
+        reference_dir.mkdir(parents=True, exist_ok=True)
+
+        # environment_seeds.yaml を作成
+        seeds_path = reference_dir / "environment_seeds.yaml"
+        seeds_path.write_text(
+            "environments:\n"
+            "  - scene_number: 1\n"
+            "    source: generate\n"
+            "    description: 朝の寝室\n"
+            "  - scene_number: 2\n"
+            "    source: generate\n"
+            "    description: カフェ\n",
+            encoding="utf-8",
+        )
+
+        scenario = Scenario(
+            title="テスト",
+            total_duration_sec=6.0,
+            characters=[character],
+            scenes=[
+                SceneSpec(
+                    scene_number=1,
+                    duration_sec=3.0,
+                    situation="部屋",
+                    camera_work=CameraWork(type="wide", description="ワイド"),
+                    caption_text="テスト",
+                    image_prompt="room",
+                ),
+                SceneSpec(
+                    scene_number=2,
+                    duration_sec=3.0,
+                    situation="カフェ",
+                    camera_work=CameraWork(type="wide", description="ワイド"),
+                    caption_text="テスト",
+                    image_prompt="cafe",
+                ),
+            ],
+            bgm_direction="テスト",
+        )
+
+        items = generator.list_items(scenario, project_dir)
+
+        # mapping.yaml が自動生成され、デフォルト衣装のキャラクターアイテム + 環境アイテム
+        assert "char_Aoi_default" in items
+        assert "env_1" in items
+        assert "env_2" in items
+
+    @pytest.mark.asyncio
+    async def test_execute_item_キャラクター生成(self, generator, mock_client, character, tmp_path) -> None:
+        """execute_item でキャラクターが AssetSet に追記されること."""
+        from daily_routine.schemas.scenario import CameraWork, Scenario, SceneSpec
+
+        project_dir = tmp_path / "project"
+        reference_dir = project_dir / "assets" / "reference"
+        reference_dir.mkdir(parents=True, exist_ok=True)
+
+        scenario = Scenario(
+            title="テスト",
+            total_duration_sec=3.0,
+            characters=[character],
+            scenes=[
+                SceneSpec(
+                    scene_number=1,
+                    duration_sec=3.0,
+                    situation="部屋",
+                    camera_work=CameraWork(type="wide", description="ワイド"),
+                    caption_text="テスト",
+                    image_prompt="room",
+                ),
+            ],
+            bgm_direction="テスト",
+        )
+
+        await generator.execute_item("char_Aoi_default", scenario, project_dir)
+
+        asset_set = generator.load_output(project_dir)
+        assert len(asset_set.characters) == 1
+        assert asset_set.characters[0].character_name == "Aoi"
+
+    @pytest.mark.asyncio
+    async def test_execute_item_環境生成(self, generator, mock_client, character, tmp_path) -> None:
+        """execute_item で環境が AssetSet に追記されること."""
+        from daily_routine.schemas.scenario import CameraWork, Scenario, SceneSpec
+
+        project_dir = tmp_path / "project"
+        reference_dir = project_dir / "assets" / "reference"
+        reference_dir.mkdir(parents=True, exist_ok=True)
+
+        seeds_path = reference_dir / "environment_seeds.yaml"
+        seeds_path.write_text(
+            "environments:\n"
+            "  - scene_number: 1\n"
+            "    source: generate\n"
+            "    description: 朝の寝室\n",
+            encoding="utf-8",
+        )
+
+        scenario = Scenario(
+            title="テスト",
+            total_duration_sec=3.0,
+            characters=[character],
+            scenes=[
+                SceneSpec(
+                    scene_number=1,
+                    duration_sec=3.0,
+                    situation="部屋",
+                    camera_work=CameraWork(type="wide", description="ワイド"),
+                    caption_text="テスト",
+                    image_prompt="room",
+                ),
+            ],
+            bgm_direction="テスト",
+        )
+
+        await generator.execute_item("env_1", scenario, project_dir)
+
+        asset_set = generator.load_output(project_dir)
+        assert len(asset_set.environments) == 1
+        assert asset_set.environments[0].scene_number == 1
 
 
 class TestSanitizeFilename:

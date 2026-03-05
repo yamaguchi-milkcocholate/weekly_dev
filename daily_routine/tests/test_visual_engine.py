@@ -168,10 +168,7 @@ def sample_assets(tmp_path: Path) -> AssetSet:
     char_dir = tmp_path / "assets" / "character" / "Aoi"
     char_dir.mkdir(parents=True)
     front = char_dir / "front.png"
-    side = char_dir / "side.png"
-    back = char_dir / "back.png"
-    for p in [front, side, back]:
-        p.write_bytes(b"fake-png")
+    front.write_bytes(b"fake-png")
 
     # キーフレーム画像を作成（シーン番号単位で1枚ずつ — 同一シーン内のカットは同じキーフレームを参照）
     kf_dir = tmp_path / "assets" / "keyframes"
@@ -187,8 +184,6 @@ def sample_assets(tmp_path: Path) -> AssetSet:
             CharacterAsset(
                 character_name="Aoi",
                 front_view=front,
-                side_view=side,
-                back_view=back,
             )
         ],
         keyframes=[
@@ -455,3 +450,71 @@ class TestVisualEnginePersistence:
 
         with pytest.raises(FileNotFoundError, match="VideoClipSet"):
             engine.load_output(tmp_path)
+
+
+class TestItemSupport:
+    """アイテム単位実行のテスト."""
+
+    def test_supports_items_True(self) -> None:
+        engine = DefaultVisualEngine()
+        assert engine.supports_items is True
+
+    def test_list_items_全カットID(
+        self, sample_storyboard: Storyboard, sample_scenario: Scenario, sample_assets: AssetSet, tmp_path: Path
+    ) -> None:
+        from daily_routine.schemas.pipeline_io import VisualInput
+
+        engine = DefaultVisualEngine()
+        input_data = VisualInput(scenario=sample_scenario, storyboard=sample_storyboard, assets=sample_assets)
+        items = engine.list_items(input_data, tmp_path)
+
+        assert len(items) == 6
+        assert items[0] == "scene_01_cut_01"
+        assert items[-1] == "scene_03_cut_02"
+
+    @pytest.mark.asyncio
+    async def test_execute_item_1クリップ生成(
+        self, sample_storyboard: Storyboard, sample_scenario: Scenario, sample_assets: AssetSet, tmp_path: Path
+    ) -> None:
+        from daily_routine.schemas.pipeline_io import VisualInput
+
+        mock_client = AsyncMock()
+
+        async def mock_generate(request: VideoGenerationRequest, output_path: Path) -> VideoGenerationResult:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake-video")
+            return _make_mock_result(1, output_path)
+
+        mock_client.generate.side_effect = mock_generate
+
+        engine = DefaultVisualEngine.from_components(client=mock_client, provider_name="runway")
+        input_data = VisualInput(scenario=sample_scenario, storyboard=sample_storyboard, assets=sample_assets)
+        await engine.execute_item("scene_01_cut_01", input_data, tmp_path)
+
+        result = engine.load_output(tmp_path)
+        assert len(result.clips) == 1
+        assert result.clips[0].scene_number == 1
+
+    @pytest.mark.asyncio
+    async def test_execute_item_差分追記(
+        self, sample_storyboard: Storyboard, sample_scenario: Scenario, sample_assets: AssetSet, tmp_path: Path
+    ) -> None:
+        """2回目のexecute_itemで追記されること."""
+        from daily_routine.schemas.pipeline_io import VisualInput
+
+        mock_client = AsyncMock()
+
+        async def mock_generate(request: VideoGenerationRequest, output_path: Path) -> VideoGenerationResult:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake-video")
+            return _make_mock_result(1, output_path)
+
+        mock_client.generate.side_effect = mock_generate
+
+        engine = DefaultVisualEngine.from_components(client=mock_client, provider_name="runway")
+        input_data = VisualInput(scenario=sample_scenario, storyboard=sample_storyboard, assets=sample_assets)
+        await engine.execute_item("scene_01_cut_01", input_data, tmp_path)
+        await engine.execute_item("scene_01_cut_02", input_data, tmp_path)
+
+        result = engine.load_output(tmp_path)
+        assert len(result.clips) == 2

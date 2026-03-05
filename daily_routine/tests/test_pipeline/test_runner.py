@@ -13,6 +13,7 @@ from daily_routine.pipeline.runner import (
     PLANNING_STEP_ORDER,
     PRODUCTION_STEP_ORDER,
     STEP_ORDER,
+    _auto_generate_keyframe_mapping,
     _build_input,
     _engine_kwargs,
     _get_next_step,
@@ -25,9 +26,17 @@ from daily_routine.pipeline.runner import (
     run_production_pipeline,
 )
 from daily_routine.pipeline.state import initialize_state, save_state
+from daily_routine.schemas.asset import AssetSet, CharacterAsset, EnvironmentAsset
 from daily_routine.schemas.project import (
     CheckpointStatus,
     PipelineStep,
+)
+from daily_routine.schemas.storyboard import (
+    CutSpec,
+    MotionIntensity,
+    SceneStoryboard,
+    Storyboard,
+    Transition,
 )
 
 
@@ -48,6 +57,65 @@ class MockEngine(StepEngine[object, str]):
 
     def save_output(self, project_dir: Path, output: str) -> None:
         (project_dir / "mock_output.txt").write_text(output)
+
+
+class MockItemEngine(StepEngine[object, str]):
+    """アイテム対応のモックエンジン."""
+
+    executed_items: list[str] = []
+
+    def __init__(self, output_value: str = "mock_output", **_kwargs: object) -> None:
+        self._output_value = output_value
+        MockItemEngine.executed_items = []
+
+    async def execute(self, input_data: object, project_dir: Path) -> str:
+        return self._output_value
+
+    def load_output(self, project_dir: Path) -> str:
+        output_file = project_dir / "mock_output.txt"
+        if output_file.exists():
+            return output_file.read_text()
+        return self._output_value
+
+    def save_output(self, project_dir: Path, output: str) -> None:
+        (project_dir / "mock_output.txt").write_text(output)
+
+    @property
+    def supports_items(self) -> bool:
+        return True
+
+    def list_items(self, input_data: object, project_dir: Path) -> list[str]:
+        return ["item_a", "item_b", "item_c"]
+
+    async def execute_item(self, item_id: str, input_data: object, project_dir: Path) -> None:
+        MockItemEngine.executed_items.append(item_id)
+
+
+class FailingItemEngine(StepEngine[object, str]):
+    """アイテム実行でエラーを発生させるテスト用エンジン."""
+
+    def __init__(self, **_kwargs: object) -> None:
+        pass
+
+    async def execute(self, input_data: object, project_dir: Path) -> str:
+        return ""
+
+    def load_output(self, project_dir: Path) -> str:
+        return ""
+
+    def save_output(self, project_dir: Path, output: str) -> None:
+        pass
+
+    @property
+    def supports_items(self) -> bool:
+        return True
+
+    def list_items(self, input_data: object, project_dir: Path) -> list[str]:
+        return ["item_a", "item_b"]
+
+    async def execute_item(self, item_id: str, input_data: object, project_dir: Path) -> None:
+        msg = "アイテム生成エラー"
+        raise RuntimeError(msg)
 
 
 class FailingEngine(StepEngine[object, str]):
@@ -494,3 +562,669 @@ class TestDynamicStepOrder:
     def test_step_order定数の整合性(self) -> None:
         assert STEP_ORDER == FULL_STEP_ORDER
         assert PLANNING_STEP_ORDER + PRODUCTION_STEP_ORDER == FULL_STEP_ORDER[:-1]  # POST_PRODUCTION除く
+
+
+class TestAutoGenerateKeyframeMapping:
+    """_auto_generate_keyframe_mapping のテスト."""
+
+    def _make_storyboard_and_assets(self, tmp_path: Path) -> tuple[Storyboard, AssetSet]:
+        """has_character が True/False 混在するテストデータを作成."""
+        front_view = tmp_path / "front.png"
+        front_view.write_bytes(b"fake_image")
+
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=9.0,
+            total_cuts=3,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="slow zoom-in",
+                            action_description="人物が立っている",
+                            motion_prompt="@char stands",
+                            keyframe_prompt="@char in a room",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=2,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_02_cut_01",
+                            scene_number=2,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.STATIC,
+                            camera_work="static",
+                            action_description="コーヒー豆のクローズアップ",
+                            motion_prompt="Steam rises",
+                            keyframe_prompt="Coffee beans close-up",
+                            transition=Transition.CUT,
+                            has_character=False,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=3,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_03_cut_01",
+                            scene_number=3,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.MODERATE,
+                            camera_work="pan",
+                            action_description="人物がコーヒーを飲む",
+                            motion_prompt="@char drinks coffee",
+                            keyframe_prompt="@char drinking coffee",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        assets = AssetSet(
+            characters=[
+                CharacterAsset(
+                    character_name="花子",
+                    front_view=front_view,
+                    identity_block="Young adult female",
+                ),
+            ],
+        )
+        return storyboard, assets
+
+    def _setup_mock_engines(self, storyboard: Storyboard, assets: AssetSet) -> None:
+        """Storyboard と AssetSet を返すモックエンジンを登録."""
+
+        class _StoryboardEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> Storyboard:
+                return storyboard
+
+        class _AssetEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> AssetSet:
+                return assets
+
+        _registry.clear()
+        for step in PipelineStep:
+            register_engine(step, MockEngine)
+        register_engine(PipelineStep.STORYBOARD, _StoryboardEngine)
+        register_engine(PipelineStep.ASSET, _AssetEngine)
+
+    def test_has_character_falseのシーンにCharacterComponentが含まれない(self, tmp_path: Path) -> None:
+        """has_character=False のシーンでは components が空になること."""
+        import yaml
+
+        storyboard, assets = self._make_storyboard_and_assets(tmp_path)
+        self._setup_mock_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        assert mapping_path.exists()
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        # scene 2 は has_character=False → CharacterComponent なし
+        scene2 = [s for s in data["scenes"] if s["scene_number"] == 2][0]
+        assert scene2["components"] == []
+
+    def test_has_character_trueのシーンにCharacterComponentが含まれる(self, tmp_path: Path) -> None:
+        """has_character=True のシーンでは CharacterComponent が含まれること."""
+        import yaml
+
+        storyboard, assets = self._make_storyboard_and_assets(tmp_path)
+        self._setup_mock_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        # scene 1 は has_character=True → CharacterComponent あり
+        scene1 = [s for s in data["scenes"] if s["scene_number"] == 1][0]
+        char_components = [c for c in scene1["components"] if c.get("type") == "character"]
+        assert len(char_components) == 1
+        assert char_components[0]["character"] == "花子"
+
+        # scene 3 も has_character=True → CharacterComponent あり
+        scene3 = [s for s in data["scenes"] if s["scene_number"] == 3][0]
+        char_components = [c for c in scene3["components"] if c.get("type") == "character"]
+        assert len(char_components) == 1
+
+
+class TestItemStepExecution:
+    """アイテム単位実行のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_アイテム対応ステップ_最初のアイテム実行後に停止(self, tmp_path) -> None:
+        """アイテム対応ステップが最初のアイテム実行後にAWAITING_REVIEWで停止すること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, MockItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        state = await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        assert state.current_step == PipelineStep.INTELLIGENCE
+        assert state.steps[PipelineStep.INTELLIGENCE].status == CheckpointStatus.AWAITING_REVIEW
+        assert len(state.steps[PipelineStep.INTELLIGENCE].items) == 3
+        assert state.steps[PipelineStep.INTELLIGENCE].items[0].status == CheckpointStatus.AWAITING_REVIEW
+        assert state.steps[PipelineStep.INTELLIGENCE].items[0].item_id == "item_a"
+        assert state.steps[PipelineStep.INTELLIGENCE].items[1].status == CheckpointStatus.PENDING
+        assert state.steps[PipelineStep.INTELLIGENCE].current_item_id == "item_a"
+        assert MockItemEngine.executed_items == ["item_a"]
+
+    @pytest.mark.asyncio
+    async def test_resume_次のアイテムへ進行(self, tmp_path) -> None:
+        """resume で現在のアイテムを承認し、次のアイテムを実行すること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, MockItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        await run_pipeline(tmp_path, "test-project", "OLの一日")
+        state = await resume_pipeline(tmp_path)
+
+        step_state = state.steps[PipelineStep.INTELLIGENCE]
+        assert step_state.items[0].status == CheckpointStatus.APPROVED
+        assert step_state.items[1].status == CheckpointStatus.AWAITING_REVIEW
+        assert step_state.items[2].status == CheckpointStatus.PENDING
+        assert step_state.current_item_id == "item_b"
+        assert "item_b" in MockItemEngine.executed_items
+
+    @pytest.mark.asyncio
+    async def test_全アイテム完了後_次のステップへ遷移(self, tmp_path) -> None:
+        """全アイテム完了後に resume で次のステップへ遷移すること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, MockItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        # item_a → item_b → item_c → 次のステップ
+        await resume_pipeline(tmp_path)  # item_b 実行
+        await resume_pipeline(tmp_path)  # item_c 実行
+        state = await resume_pipeline(tmp_path)  # 全アイテム完了 → SCENARIO
+
+        assert state.steps[PipelineStep.INTELLIGENCE].status == CheckpointStatus.APPROVED
+        assert state.current_step == PipelineStep.SCENARIO
+        assert state.steps[PipelineStep.SCENARIO].status == CheckpointStatus.AWAITING_REVIEW
+
+    @pytest.mark.asyncio
+    async def test_アイテム実行エラー_ERROR状態(self, tmp_path) -> None:
+        """アイテム実行でエラーが発生するとERROR状態になること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, FailingItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        state = await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        step_state = state.steps[PipelineStep.INTELLIGENCE]
+        assert step_state.status == CheckpointStatus.ERROR
+        assert step_state.items[0].status == CheckpointStatus.ERROR
+        assert step_state.items[0].error == "アイテム生成エラー"
+
+
+class TestItemRetry:
+    """アイテム単位リトライのテスト."""
+
+    @pytest.mark.asyncio
+    async def test_retry_item_個別アイテムリトライ(self, tmp_path) -> None:
+        """retry --item でアイテム単位のリトライができること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, MockItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        # item_a が AWAITING_REVIEW の状態でリトライ
+        state = await retry_pipeline(tmp_path, item_id="item_a")
+
+        step_state = state.steps[PipelineStep.INTELLIGENCE]
+        assert step_state.items[0].status == CheckpointStatus.AWAITING_REVIEW
+        assert "item_a" in MockItemEngine.executed_items
+
+    @pytest.mark.asyncio
+    async def test_retry_item_存在しないアイテム_InvalidStateError(self, tmp_path) -> None:
+        """存在しないアイテムIDでリトライするとエラーになること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, MockItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        with pytest.raises(InvalidStateError, match="見つかりません"):
+            await retry_pipeline(tmp_path, item_id="nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_retry_item_非アイテムステップ_InvalidStateError(self, tmp_path) -> None:
+        """アイテム未対応ステップでアイテムリトライするとエラーになること."""
+        await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        with pytest.raises(InvalidStateError, match="アイテム単位実行ではありません"):
+            await retry_pipeline(tmp_path, item_id="some_item")
+
+    @pytest.mark.asyncio
+    async def test_retry_item_PENDING状態のアイテム_InvalidStateError(self, tmp_path) -> None:
+        """PENDING状態のアイテムをリトライしようとするとエラーになること."""
+        _registry.clear()
+        register_engine(PipelineStep.INTELLIGENCE, MockItemEngine)
+        for step in list(PipelineStep)[1:]:
+            register_engine(step, MockEngine)
+
+        await run_pipeline(tmp_path, "test-project", "OLの一日")
+
+        # item_b は PENDING 状態
+        with pytest.raises(InvalidStateError, match="pending"):
+            await retry_pipeline(tmp_path, item_id="item_b")
+
+
+class TestAutoGenerateKeyframeMappingLocationGroup:
+    """P0: location_group ベースの environment 共有テスト."""
+
+    def _make_storyboard_with_location_groups(self, tmp_path: Path) -> tuple[Storyboard, AssetSet]:
+        """location_group が設定されたテストデータを作成."""
+        front_view = tmp_path / "front.png"
+        front_view.write_bytes(b"fake_image")
+        env_img = tmp_path / "env.png"
+        env_img.write_bytes(b"fake_env")
+
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=9.0,
+            total_cuts=3,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    location_group="bedroom",
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="slow zoom-in",
+                            action_description="人物が起きる",
+                            motion_prompt="@char wakes up",
+                            keyframe_prompt="@char in bedroom",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=2,
+                    scene_duration_sec=3.0,
+                    location_group="bedroom",
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_02_cut_01",
+                            scene_number=2,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="pan",
+                            action_description="人物がストレッチする",
+                            motion_prompt="@char stretches",
+                            keyframe_prompt="@char stretching in bedroom",
+                            transition=Transition.CROSS_FADE,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=3,
+                    scene_duration_sec=3.0,
+                    location_group="kitchen",
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_03_cut_01",
+                            scene_number=3,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.MODERATE,
+                            camera_work="static",
+                            action_description="人物がコーヒーを淹れる",
+                            motion_prompt="@char makes coffee",
+                            keyframe_prompt="@char in kitchen",
+                            transition=Transition.CROSS_FADE,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        assets = AssetSet(
+            characters=[
+                CharacterAsset(
+                    character_name="花子",
+                    front_view=front_view,
+                    identity_block="Young adult female",
+                ),
+            ],
+            environments=[
+                EnvironmentAsset(
+                    scene_number=1,
+                    description="cozy bedroom with morning light",
+                    image_path=env_img,
+                ),
+            ],
+        )
+        return storyboard, assets
+
+    def _setup_mock_engines(self, storyboard: Storyboard, assets: AssetSet) -> None:
+        class _StoryboardEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> Storyboard:
+                return storyboard
+
+        class _AssetEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> AssetSet:
+                return assets
+
+        _registry.clear()
+        for step in PipelineStep:
+            register_engine(step, MockEngine)
+        register_engine(PipelineStep.STORYBOARD, _StoryboardEngine)
+        register_engine(PipelineStep.ASSET, _AssetEngine)
+
+    def test_同一location_groupのシーンにenvironmentが共有される(self, tmp_path: Path) -> None:
+        """Scene 1 にのみ environment 定義があるが、同じ location_group の Scene 2 にも共有されること."""
+        import yaml
+
+        storyboard, assets = self._make_storyboard_with_location_groups(tmp_path)
+        self._setup_mock_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        scene1 = [s for s in data["scenes"] if s["scene_number"] == 1][0]
+        scene2 = [s for s in data["scenes"] if s["scene_number"] == 2][0]
+        scene3 = [s for s in data["scenes"] if s["scene_number"] == 3][0]
+
+        assert scene1["environment"] == "cozy bedroom with morning light"
+        assert scene2["environment"] == "cozy bedroom with morning light"
+        assert scene3.get("environment", "") == ""
+
+    def test_location_group空_フォールバックなし(self, tmp_path: Path) -> None:
+        """location_group が空の場合、フォールバックしないこと."""
+        import yaml
+
+        front_view = tmp_path / "front.png"
+        front_view.write_bytes(b"fake_image")
+        env_img = tmp_path / "env.png"
+        env_img.write_bytes(b"fake_env")
+
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=6.0,
+            total_cuts=2,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    location_group="",
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="static",
+                            action_description="テスト",
+                            motion_prompt="test",
+                            keyframe_prompt="@char test",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=2,
+                    scene_duration_sec=3.0,
+                    location_group="",
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_02_cut_01",
+                            scene_number=2,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="static",
+                            action_description="テスト",
+                            motion_prompt="test",
+                            keyframe_prompt="@char test",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        assets = AssetSet(
+            characters=[
+                CharacterAsset(
+                    character_name="花子",
+                    front_view=front_view,
+                    identity_block="Young adult female",
+                ),
+            ],
+            environments=[
+                EnvironmentAsset(
+                    scene_number=1,
+                    description="a room",
+                    image_path=env_img,
+                ),
+            ],
+        )
+
+        class _StoryboardEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> Storyboard:
+                return storyboard
+
+        class _AssetEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> AssetSet:
+                return assets
+
+        _registry.clear()
+        for step in PipelineStep:
+            register_engine(step, MockEngine)
+        register_engine(PipelineStep.STORYBOARD, _StoryboardEngine)
+        register_engine(PipelineStep.ASSET, _AssetEngine)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        scene1 = [s for s in data["scenes"] if s["scene_number"] == 1][0]
+        scene2 = [s for s in data["scenes"] if s["scene_number"] == 2][0]
+
+        assert scene1["environment"] == "a room"
+        # location_group が空なので Scene 2 にはフォールバックしない
+        assert scene2.get("environment", "") == ""
+
+
+class TestAutoGenerateKeyframeMappingClothingVariant:
+    """P1: clothing_variant ベースの variant_id 割り当てテスト."""
+
+    def _make_data(
+        self,
+        tmp_path: Path,
+        *,
+        clothing_variants: list[str] | None = None,
+        asset_variant_ids: list[str] | None = None,
+    ) -> tuple[Storyboard, AssetSet]:
+        """clothing_variant テスト用データを作成."""
+        front_view = tmp_path / "front.png"
+        front_view.write_bytes(b"fake_image")
+
+        if clothing_variants is None:
+            clothing_variants = ["home", "work", "work"]
+        if asset_variant_ids is None:
+            asset_variant_ids = ["home", "work"]
+
+        storyboard_scenes = []
+        for i, cv in enumerate(clothing_variants, start=1):
+            storyboard_scenes.append(
+                SceneStoryboard(
+                    scene_number=i,
+                    scene_duration_sec=3.0,
+                    location_group=f"loc_{i}",
+                    cuts=[
+                        CutSpec(
+                            cut_id=f"scene_{i:02d}_cut_01",
+                            scene_number=i,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="static",
+                            action_description="テスト",
+                            motion_prompt="test",
+                            keyframe_prompt="@char test",
+                            transition=Transition.CUT,
+                            has_character=True,
+                            clothing_variant=cv,
+                        ),
+                    ],
+                )
+            )
+
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=3.0 * len(clothing_variants),
+            total_cuts=len(clothing_variants),
+            scenes=storyboard_scenes,
+        )
+
+        characters = [
+            CharacterAsset(
+                character_name="花子",
+                variant_id=vid,
+                front_view=front_view,
+                identity_block="Young adult female",
+            )
+            for vid in asset_variant_ids
+        ]
+
+        assets = AssetSet(characters=characters)
+        return storyboard, assets
+
+    def _setup_engines(self, storyboard: Storyboard, assets: AssetSet) -> None:
+        class _StoryboardEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> Storyboard:
+                return storyboard
+
+        class _AssetEngine(MockEngine):
+            def load_output(self, project_dir: Path) -> AssetSet:
+                return assets
+
+        _registry.clear()
+        for step in PipelineStep:
+            register_engine(step, MockEngine)
+        register_engine(PipelineStep.STORYBOARD, _StoryboardEngine)
+        register_engine(PipelineStep.ASSET, _AssetEngine)
+
+    def test_clothing_variantに基づくvariant_id割り当て(self, tmp_path: Path) -> None:
+        """clothing_variant が asset の variant_id にマッチすること."""
+        import yaml
+
+        storyboard, assets = self._make_data(tmp_path)
+        self._setup_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        scene1 = [s for s in data["scenes"] if s["scene_number"] == 1][0]
+        scene2 = [s for s in data["scenes"] if s["scene_number"] == 2][0]
+        scene3 = [s for s in data["scenes"] if s["scene_number"] == 3][0]
+
+        assert scene1["components"][0]["variant_id"] == "home"
+        assert scene2["components"][0]["variant_id"] == "work"
+        assert scene3["components"][0]["variant_id"] == "work"
+
+    def test_clothing_variant不一致_フォールバック警告(self, tmp_path: Path) -> None:
+        """clothing_variant に一致する asset がない場合、最初のバリアントにフォールバックすること."""
+        import yaml
+
+        storyboard, assets = self._make_data(
+            tmp_path,
+            clothing_variants=["pajama"],
+            asset_variant_ids=["home", "work"],
+        )
+        self._setup_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        scene1 = [s for s in data["scenes"] if s["scene_number"] == 1][0]
+        # フォールバックで最初の asset の variant_id が使用される
+        assert scene1["components"][0]["variant_id"] == "home"
+
+    def test_clothing_variant未設定_default使用(self, tmp_path: Path) -> None:
+        """clothing_variant が未設定（default）の場合の動作確認."""
+        import yaml
+
+        storyboard, assets = self._make_data(
+            tmp_path,
+            clothing_variants=["default"],
+            asset_variant_ids=["default"],
+        )
+        self._setup_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        scene1 = [s for s in data["scenes"] if s["scene_number"] == 1][0]
+        assert scene1["components"][0]["variant_id"] == "default"
+
+    def test_複数バリアント_シーンごとに異なるvariant_id(self, tmp_path: Path) -> None:
+        """シーンごとに異なる clothing_variant が正しく反映されること."""
+        import yaml
+
+        storyboard, assets = self._make_data(
+            tmp_path,
+            clothing_variants=["home", "work", "casual", "home"],
+            asset_variant_ids=["home", "work", "casual"],
+        )
+        self._setup_engines(storyboard, assets)
+
+        _auto_generate_keyframe_mapping(tmp_path)
+
+        mapping_path = tmp_path / "storyboard" / "keyframe_mapping.yaml"
+        data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+
+        variant_ids = [
+            s["components"][0]["variant_id"] for s in sorted(data["scenes"], key=lambda x: x["scene_number"])
+        ]
+        assert variant_ids == ["home", "work", "casual", "home"]

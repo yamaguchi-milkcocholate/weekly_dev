@@ -155,6 +155,78 @@ class DefaultVisualEngine(StepEngine[VisualInput, VideoClipSet], VisualEngine):
         self._last_result = result
         return result.video_path
 
+    # --- アイテム単位実行 ---
+
+    @property
+    def supports_items(self) -> bool:
+        """アイテム単位実行に対応する."""
+        return True
+
+    def list_items(self, input_data: VisualInput, project_dir: Path) -> list[str]:
+        """全カットIDをアイテムIDとして返す."""
+        return [cut.cut_id for scene in input_data.storyboard.scenes for cut in scene.cuts]
+
+    async def execute_item(self, item_id: str, input_data: VisualInput, project_dir: Path) -> None:
+        """指定 cut_id の動画クリップ1本を生成し、VideoClipSet に追記保存する."""
+        output_dir = project_dir / "clips"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 既存の VideoClipSet を読み込み（なければ空で作成）
+        try:
+            clip_set = self.load_output(project_dir)
+        except FileNotFoundError:
+            clip_set = VideoClipSet(clips=[], total_cost_usd=0.0, provider=self._provider_name)
+
+        # 対象カットを検索
+        target_cut = None
+        for scene in input_data.storyboard.scenes:
+            for cut in scene.cuts:
+                if cut.cut_id == item_id:
+                    target_cut = cut
+                    break
+            if target_cut:
+                break
+
+        if target_cut is None:
+            msg = f"カット '{item_id}' が Storyboard に見つかりません"
+            raise ValueError(msg)
+
+        keyframe = self._find_keyframe(input_data.assets, target_cut.cut_id, target_cut.scene_number)
+        output_path = output_dir / f"{target_cut.cut_id}.mp4"
+
+        clip_path = await self.generate_cut_clip(
+            cut_id=target_cut.cut_id,
+            prompt=target_cut.motion_prompt,
+            reference_image=keyframe.image_path,
+            duration_sec=int(target_cut.duration_sec),
+            output_path=output_path,
+        )
+
+        result = self._last_result
+
+        new_clip = VideoClip(
+            scene_number=target_cut.scene_number,
+            clip_path=clip_path,
+            duration_sec=target_cut.duration_sec,
+            model_name=result.model_name,
+            cost_usd=result.cost_usd,
+            generation_time_sec=result.generation_time_sec,
+        )
+
+        # 既存の同一 cut_id のクリップを置換、なければ追加
+        replaced = False
+        for i, clip in enumerate(clip_set.clips):
+            if clip.clip_path.stem == item_id:
+                clip_set.clips[i] = new_clip
+                replaced = True
+                break
+        if not replaced:
+            clip_set.clips.append(new_clip)
+
+        clip_set.total_cost_usd = sum(c.cost_usd for c in clip_set.clips if c.cost_usd is not None)
+        self.save_output(project_dir, clip_set)
+        logger.info("クリップ '%s' を生成・保存しました", item_id)
+
     @staticmethod
     def _find_keyframe(assets: AssetSet, cut_id: str, scene_number: int) -> KeyframeAsset:
         """AssetSetからキーフレームを取得する（cut_id 優先、scene_number フォールバック）."""

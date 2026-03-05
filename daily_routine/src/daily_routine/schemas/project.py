@@ -30,6 +30,16 @@ class CheckpointStatus(StrEnum):
     ERROR = "error"
 
 
+class ItemState(BaseModel):
+    """ステップ内の個別アイテムの実行状態."""
+
+    item_id: str
+    status: CheckpointStatus = CheckpointStatus.PENDING
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+
+
 class StepState(BaseModel):
     """各ステップの実行状態."""
 
@@ -38,6 +48,8 @@ class StepState(BaseModel):
     completed_at: datetime | None = None
     error: str | None = None
     retry_count: int = Field(default=0, description="リトライ回数")
+    items: list[ItemState] = Field(default_factory=list, description="アイテム単位の状態")
+    current_item_id: str | None = Field(default=None, description="現在処理中のアイテムID")
 
 
 class PipelineState(BaseModel):

@@ -38,6 +38,10 @@ class CutSpec(BaseModel):
     transition: Transition = Field(default=Transition.CUT, description="次のカットへのトランジション種別")
     pose_instruction: str = Field(default="", description="ポーズ指示（C3-I1 Flash分析入力）")
     has_character: bool = Field(default=True, description="キャラクターが登場するカットかどうか")
+    clothing_variant: str = Field(
+        default="default",
+        description="衣装バリアントラベル（mapping.yaml の label に対応。例: 'home', 'work', 'casual'）",
+    )
 
 
 class SceneStoryboard(BaseModel):
@@ -45,6 +49,10 @@ class SceneStoryboard(BaseModel):
 
     scene_number: int = Field(description="シーン番号")
     scene_duration_sec: float = Field(description="シーン全体の尺（カットの合計）")
+    location_group: str = Field(
+        default="",
+        description="ロケーショングループID（同じ背景を共有するシーンに同じIDを付与。例: 'bedroom', 'office', 'cafe'）",
+    )
     cuts: list[CutSpec] = Field(description="カットリスト")
 
 

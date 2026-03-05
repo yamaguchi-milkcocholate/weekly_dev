@@ -14,8 +14,6 @@ _CHARACTER_BG = "solid bright green chroma key background (#00FF00)"
 # C1-F2-MA 検証で確立された全身条件を反映
 _VIEW_PROMPTS: dict[str, str] = {
     "front": "full body shot from head to feet, front view, standing pose, looking at camera",
-    "side": "full body shot from head to feet, right side profile view, natural standing pose",
-    "back": "full body shot from head to feet, rear view, standing pose, looking away from camera",
 }
 
 # C2-R2: 参照画像から環境再現（人物除去）
@@ -66,8 +64,6 @@ _MA_GENERATION_TEMPLATE = (
 # マルチアングル生成のアングル別指示
 _MA_ANGLE_INSTRUCTIONS: dict[str, str] = {
     "front": "facing the camera",
-    "side": "side view (profile)",
-    "back": "back view (seen from behind)",
 }
 
 # 人物ベース画像自動生成テンプレート（person が null の場合）

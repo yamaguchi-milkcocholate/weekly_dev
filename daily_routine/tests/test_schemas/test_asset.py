@@ -21,8 +21,6 @@ def _make_asset_set() -> AssetSet:
             CharacterAsset(
                 character_name="花子",
                 front_view=Path("assets/character/hanako_front.png"),
-                side_view=Path("assets/character/hanako_side.png"),
-                back_view=Path("assets/character/hanako_back.png"),
             ),
         ],
     )
@@ -50,8 +48,6 @@ class TestCharacterAssetVariantId:
         char = CharacterAsset(
             character_name="花子",
             front_view=Path("front.png"),
-            side_view=Path("side.png"),
-            back_view=Path("back.png"),
         )
         assert char.variant_id == "default"
 
@@ -60,8 +56,6 @@ class TestCharacterAssetVariantId:
             character_name="花子",
             variant_id="pajama",
             front_view=Path("front.png"),
-            side_view=Path("side.png"),
-            back_view=Path("back.png"),
         )
         assert char.variant_id == "pajama"
 
@@ -70,8 +64,6 @@ class TestCharacterAssetVariantId:
         data = {
             "character_name": "花子",
             "front_view": "front.png",
-            "side_view": "side.png",
-            "back_view": "back.png",
         }
         char = CharacterAsset.model_validate(data)
         assert char.variant_id == "default"
@@ -84,8 +76,6 @@ class TestCharacterAssetIdentityBlock:
         char = CharacterAsset(
             character_name="花子",
             front_view=Path("front.png"),
-            side_view=Path("side.png"),
-            back_view=Path("back.png"),
         )
         assert char.identity_block == ""
 
@@ -93,8 +83,6 @@ class TestCharacterAssetIdentityBlock:
         char = CharacterAsset(
             character_name="花子",
             front_view=Path("front.png"),
-            side_view=Path("side.png"),
-            back_view=Path("back.png"),
             identity_block="Young adult female, dark hair",
         )
         assert char.identity_block == "Young adult female, dark hair"

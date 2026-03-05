@@ -9,10 +9,12 @@ from daily_routine.pipeline.base import StepEngine
 from daily_routine.pipeline.exceptions import InvalidStateError, StepExecutionError
 from daily_routine.pipeline.registry import create_engine
 from daily_routine.pipeline.state import initialize_state, load_state, save_state
+from daily_routine.pipeline.summarizer import StepSummarizer, log_item_summary, log_summary
 from daily_routine.schemas.keyframe_mapping import KeyframeMapping
 from daily_routine.schemas.pipeline_io import IntelligenceInput
 from daily_routine.schemas.project import (
     CheckpointStatus,
+    ItemState,
     PipelineState,
     PipelineStep,
 )
@@ -85,6 +87,7 @@ async def resume_pipeline(
     """パイプラインを再開する.
 
     現在AWAITING_REVIEWのステップをAPPROVEDにし、次のステップを実行する。
+    アイテム対応ステップの場合は現在のアイテムを承認し、次のアイテムを実行する。
 
     Args:
         project_dir: プロジェクトデータディレクトリ
@@ -112,7 +115,13 @@ async def resume_pipeline(
             " resume は AWAITING_REVIEW 状態でのみ可能です"
         )
 
-    # 現在のステップをAPPROVEDに遷移
+    engine = create_engine(current_step, **_engine_kwargs(current_step, api_keys))
+
+    # アイテムモード: アイテムが存在し、まだ完了していないアイテムがある場合
+    if engine.supports_items and step_state.items:
+        return await _resume_item_step(state, current_step, engine, project_dir, api_keys)
+
+    # 既存動作: ステップを承認し、次のステップを実行
     step_state.status = CheckpointStatus.APPROVED
     step_state.completed_at = datetime.now()
 
@@ -130,21 +139,23 @@ async def resume_pipeline(
         _auto_generate_keyframe_mapping(project_dir)
 
     # 次のステップを実行
-    engine = create_engine(next_step, **_engine_kwargs(next_step, api_keys))
+    next_engine = create_engine(next_step, **_engine_kwargs(next_step, api_keys))
     input_data = _build_input(next_step, project_dir)
-    state = await _execute_step(state, next_step, engine, input_data, project_dir)
+    state = await _execute_step(state, next_step, next_engine, input_data, project_dir)
     return state
 
 
 async def retry_pipeline(
     project_dir: Path,
     api_keys: dict[str, str] | None = None,
+    item_id: str | None = None,
 ) -> PipelineState:
-    """エラーステップを再試行する.
+    """エラーステップまたは個別アイテムを再試行する.
 
     Args:
         project_dir: プロジェクトデータディレクトリ
         api_keys: APIキーの辞書
+        item_id: リトライするアイテムID（省略時はステップ全体をリトライ）
 
     Returns:
         実行後のPipelineState
@@ -162,6 +173,54 @@ async def retry_pipeline(
         raise InvalidStateError("実行中のステップがありません")
 
     step_state = state.steps[current_step]
+
+    # アイテム単位リトライ
+    if item_id is not None:
+        if not step_state.items:
+            raise InvalidStateError(f"ステップ '{current_step.value}' はアイテム単位実行ではありません")
+
+        target_item = next((i for i in step_state.items if i.item_id == item_id), None)
+        if target_item is None:
+            raise InvalidStateError(f"アイテム '{item_id}' が見つかりません")
+
+        if target_item.status not in (
+            CheckpointStatus.AWAITING_REVIEW,
+            CheckpointStatus.ERROR,
+            CheckpointStatus.APPROVED,
+        ):
+            raise InvalidStateError(
+                f"アイテム '{item_id}' は '{target_item.status.value}' 状態です。"
+                " retry --item は AWAITING_REVIEW, APPROVED, ERROR 状態でのみ可能です"
+            )
+
+        engine = create_engine(current_step, **_engine_kwargs(current_step, api_keys))
+        input_data = _build_input(current_step, project_dir)
+
+        target_item.status = CheckpointStatus.RUNNING
+        target_item.started_at = datetime.now()
+        target_item.error = None
+        step_state.current_item_id = item_id
+        save_state(project_dir, state)
+
+        summarizer = StepSummarizer()
+        item_pre = summarizer.build_item_pre_summary(current_step, item_id, input_data, project_dir)
+        if item_pre:
+            log_item_summary(item_pre)
+
+        try:
+            await engine.execute_item(item_id, input_data, project_dir)
+            target_item.status = CheckpointStatus.AWAITING_REVIEW
+            target_item.completed_at = datetime.now()
+            logger.info("アイテム '%s' のリトライが完了しました", item_id)
+        except Exception as e:
+            target_item.status = CheckpointStatus.ERROR
+            target_item.error = str(e)
+            logger.error("アイテム '%s' のリトライでエラーが発生しました: %s", item_id, e)
+
+        save_state(project_dir, state)
+        return state
+
+    # ステップ全体のリトライ（既存動作）
     if step_state.status != CheckpointStatus.ERROR:
         raise InvalidStateError(
             f"ステップ '{current_step.value}' は '{step_state.status.value}' 状態です。"
@@ -190,6 +249,8 @@ async def _execute_step(
 ) -> PipelineState:
     """単一ステップを実行する.
 
+    アイテム対応エンジンの場合はアイテムリストを初期化し、最初のアイテムを実行する。
+
     Args:
         state: 現在のPipelineState
         step: 実行するステップ
@@ -209,9 +270,22 @@ async def _execute_step(
 
     logger.info("ステップ '%s' を実行中...", step.value)
 
+    summarizer = StepSummarizer()
+    step_pre = summarizer.build_step_pre_summary(step, input_data, project_dir)
+    if step_pre:
+        log_summary(step_pre)
+
+    if engine.supports_items:
+        # アイテム対応: リスト初期化 + 最初のアイテム実行
+        return await _execute_item_step_init(state, step, engine, input_data, project_dir, summarizer=summarizer)
+
     try:
         output = await engine.execute(input_data, project_dir)
         engine.save_output(project_dir, output)
+
+        step_post = summarizer.build_step_post_summary(step, input_data, output, project_dir)
+        if step_post:
+            log_summary(step_post)
 
         step_state.status = CheckpointStatus.AWAITING_REVIEW
         step_state.completed_at = datetime.now()
@@ -224,6 +298,160 @@ async def _execute_step(
         logger.error("ステップ '%s' でエラーが発生しました: %s", step.value, e)
 
     save_state(project_dir, state)
+    return state
+
+
+async def _execute_item_step_init(
+    state: PipelineState,
+    step: PipelineStep,
+    engine: StepEngine,
+    input_data: object,
+    project_dir: Path,
+    *,
+    summarizer: StepSummarizer | None = None,
+) -> PipelineState:
+    """アイテム対応ステップのアイテムリストを初期化し、最初のアイテムを実行する."""
+    step_state = state.steps[step]
+
+    try:
+        item_ids = engine.list_items(input_data, project_dir)
+        step_state.items = [ItemState(item_id=iid) for iid in item_ids]
+
+        if not item_ids:
+            # アイテムがない場合はステップ完了
+            step_state.status = CheckpointStatus.AWAITING_REVIEW
+            step_state.completed_at = datetime.now()
+            save_state(project_dir, state)
+            return state
+
+        # 最初のアイテムを実行
+        first_item = step_state.items[0]
+        first_item.status = CheckpointStatus.RUNNING
+        first_item.started_at = datetime.now()
+        step_state.current_item_id = first_item.item_id
+        save_state(project_dir, state)
+
+        if summarizer:
+            item_pre = summarizer.build_item_pre_summary(step, first_item.item_id, input_data, project_dir)
+            if item_pre:
+                log_item_summary(item_pre)
+
+        await engine.execute_item(first_item.item_id, input_data, project_dir)
+        first_item.status = CheckpointStatus.AWAITING_REVIEW
+        first_item.completed_at = datetime.now()
+
+        step_state.status = CheckpointStatus.AWAITING_REVIEW
+        logger.info(
+            "ステップ '%s' アイテム '%s' が完了しました（確認待ち）",
+            step.value,
+            first_item.item_id,
+        )
+    except StepExecutionError:
+        raise
+    except Exception as e:
+        if step_state.items and step_state.current_item_id:
+            current_item = next(
+                (i for i in step_state.items if i.item_id == step_state.current_item_id),
+                None,
+            )
+            if current_item:
+                current_item.status = CheckpointStatus.ERROR
+                current_item.error = str(e)
+        step_state.status = CheckpointStatus.ERROR
+        step_state.error = str(e)
+        logger.error("ステップ '%s' でエラーが発生しました: %s", step.value, e)
+
+    save_state(project_dir, state)
+    return state
+
+
+async def _resume_item_step(
+    state: PipelineState,
+    current_step: PipelineStep,
+    engine: StepEngine,
+    project_dir: Path,
+    api_keys: dict[str, str] | None = None,
+) -> PipelineState:
+    """アイテム単位ステップの resume を処理する.
+
+    1. 現在のアイテムを APPROVED に遷移
+    2. 次の PENDING アイテムを検索
+    3. あれば execute_item() を実行
+    4. なければステップ完了 → 次のステップへ遷移
+    """
+    step_state = state.steps[current_step]
+    input_data = _build_input(current_step, project_dir)
+
+    # 1. 現在のアイテムを承認
+    current_item = next(
+        (i for i in step_state.items if i.item_id == step_state.current_item_id),
+        None,
+    )
+    if current_item and current_item.status == CheckpointStatus.AWAITING_REVIEW:
+        current_item.status = CheckpointStatus.APPROVED
+        current_item.completed_at = datetime.now()
+
+    # 2. 次の PENDING アイテムを検索
+    next_item = next(
+        (i for i in step_state.items if i.status == CheckpointStatus.PENDING),
+        None,
+    )
+
+    if next_item is not None:
+        # 3. 次のアイテムを実行
+        next_item.status = CheckpointStatus.RUNNING
+        next_item.started_at = datetime.now()
+        step_state.current_item_id = next_item.item_id
+        save_state(project_dir, state)
+
+        summarizer = StepSummarizer()
+        item_pre = summarizer.build_item_pre_summary(current_step, next_item.item_id, input_data, project_dir)
+        if item_pre:
+            log_item_summary(item_pre)
+
+        try:
+            await engine.execute_item(next_item.item_id, input_data, project_dir)
+            next_item.status = CheckpointStatus.AWAITING_REVIEW
+            next_item.completed_at = datetime.now()
+            logger.info(
+                "ステップ '%s' アイテム '%s' が完了しました（確認待ち）",
+                current_step.value,
+                next_item.item_id,
+            )
+        except Exception as e:
+            next_item.status = CheckpointStatus.ERROR
+            next_item.error = str(e)
+            step_state.status = CheckpointStatus.ERROR
+            step_state.error = str(e)
+            logger.error(
+                "ステップ '%s' アイテム '%s' でエラーが発生しました: %s",
+                current_step.value,
+                next_item.item_id,
+                e,
+            )
+
+        save_state(project_dir, state)
+        return state
+
+    # 4. 全アイテム完了 → ステップを承認し次のステップへ
+    step_state.status = CheckpointStatus.APPROVED
+    step_state.completed_at = datetime.now()
+    step_state.current_item_id = None
+
+    next_step = _get_next_step(current_step, state)
+    if next_step is None:
+        state.completed = True
+        save_state(project_dir, state)
+        logger.info("パイプラインが完了しました: %s", state.project_id)
+        return state
+
+    # ASSET → KEYFRAME 遷移時に keyframe_mapping.yaml を自動生成
+    if next_step == PipelineStep.KEYFRAME:
+        _auto_generate_keyframe_mapping(project_dir)
+
+    next_engine = create_engine(next_step, **_engine_kwargs(next_step, api_keys))
+    next_input = _build_input(next_step, project_dir)
+    state = await _execute_step(state, next_step, next_engine, next_input, project_dir)
     return state
 
 
@@ -413,6 +641,17 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
         logger.warning("Storyboard または AssetSet が見つからないため、keyframe_mapping の自動生成をスキップします")
         return
 
+    # location_group → scene_number[] マップ構築
+    group_to_scenes: dict[str, list[int]] = {}
+    for sb_scene in storyboard.scenes:
+        if sb_scene.location_group:
+            group_to_scenes.setdefault(sb_scene.location_group, []).append(sb_scene.scene_number)
+
+    # scene_number → location_group マップ構築
+    scene_to_group: dict[int, str] = {}
+    for sb_scene in storyboard.scenes:
+        scene_to_group[sb_scene.scene_number] = sb_scene.location_group
+
     scenes: list[dict] = []
     seen_scene_numbers: set[int] = set()
 
@@ -421,20 +660,58 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
             continue
         seen_scene_numbers.add(scene.scene_number)
 
+        scene_has_character = any(cut.has_character for cut in scene.cuts)
         components = []
-        if assets.characters:
+        if scene_has_character and assets.characters:
+            # storyboard のカットから clothing_variant を取得
+            clothing_variant = "default"
+            for cut in scene.cuts:
+                if cut.has_character and cut.clothing_variant:
+                    clothing_variant = cut.clothing_variant
+                    break
+
+            # clothing_variant にマッチする asset variant_id を検索
+            char_name = assets.characters[0].character_name
+            variant_id = clothing_variant
+            matched = any(c.variant_id == clothing_variant for c in assets.characters if c.character_name == char_name)
+            if not matched:
+                # フォールバック: 最初のバリアントを使用 + 警告
+                variant_id = assets.characters[0].variant_id
+                logger.warning(
+                    "clothing_variant '%s' に一致する asset が見つかりません (scene=%d)。"
+                    "フォールバック: variant_id='%s'",
+                    clothing_variant,
+                    scene.scene_number,
+                    variant_id,
+                )
+
             components.append(
                 CharacterComponent(
-                    character=assets.characters[0].character_name,
-                    variant_id=assets.characters[0].variant_id,
+                    character=char_name,
+                    variant_id=variant_id,
                 )
             )
 
+        # Step 1: 直接の scene_number マッチ
         environment = ""
         for env in assets.environments:
             if env.scene_number == scene.scene_number:
                 environment = env.description
                 break
+
+        # Step 2: 同じ location_group 内の他シーンから environment を検索
+        if not environment and scene.scene_number in scene_to_group:
+            group = scene_to_group[scene.scene_number]
+            sibling_scenes = group_to_scenes.get(group, [])
+            for sibling_sn in sibling_scenes:
+                if sibling_sn == scene.scene_number:
+                    continue
+                for env in assets.environments:
+                    if env.scene_number == sibling_sn:
+                        environment = env.description
+                        break
+                if environment:
+                    break
         pose = ""
         if scene.cuts:
             pose = scene.cuts[0].pose_instruction

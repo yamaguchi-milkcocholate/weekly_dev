@@ -44,3 +44,30 @@ class StepEngine[InputT, OutputT](ABC):
             project_dir: プロジェクトデータディレクトリ
             output: 保存する出力データ
         """
+
+    @property
+    def supports_items(self) -> bool:
+        """アイテム単位実行に対応するかどうか."""
+        return False
+
+    def list_items(self, input_data: InputT, project_dir: Path) -> list[str]:
+        """生成するアイテムIDの順序付きリストを返す.
+
+        Args:
+            input_data: このステップに必要な全入力データ
+            project_dir: プロジェクトデータディレクトリ
+
+        Returns:
+            アイテムIDのリスト
+        """
+        raise NotImplementedError
+
+    async def execute_item(self, item_id: str, input_data: InputT, project_dir: Path) -> None:
+        """1アイテムを生成し、出力を差分保存する.
+
+        Args:
+            item_id: 生成対象のアイテムID
+            input_data: このステップに必要な全入力データ
+            project_dir: プロジェクトデータディレクトリ
+        """
+        raise NotImplementedError

@@ -52,6 +52,7 @@ def _make_storyboard(
             SceneStoryboard(
                 scene_number=1,
                 scene_duration_sec=9.0,
+                location_group="bedroom",
                 cuts=[
                     _make_cut(1, 1, 3.0),
                     _make_cut(1, 2, 3.0),
@@ -61,6 +62,7 @@ def _make_storyboard(
             SceneStoryboard(
                 scene_number=2,
                 scene_duration_sec=9.0,
+                location_group="office",
                 cuts=[
                     _make_cut(2, 1, 3.0, transition=Transition.CROSS_FADE),
                     _make_cut(2, 2, 3.0),
@@ -70,6 +72,7 @@ def _make_storyboard(
             SceneStoryboard(
                 scene_number=3,
                 scene_duration_sec=12.0,
+                location_group="cafe",
                 cuts=[
                     _make_cut(3, 1, 3.0, transition=Transition.CROSS_FADE),
                     _make_cut(3, 2, 3.0),
@@ -283,6 +286,7 @@ class TestStoryboardValidator:
             SceneStoryboard(
                 scene_number=1,
                 scene_duration_sec=30.0,
+                location_group="cafe",
                 cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
                 + [
                     _make_cut(
@@ -303,6 +307,7 @@ class TestStoryboardValidator:
             SceneStoryboard(
                 scene_number=1,
                 scene_duration_sec=30.0,
+                location_group="cafe",
                 cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
                 + [
                     _make_cut(
@@ -325,6 +330,7 @@ class TestStoryboardValidator:
             SceneStoryboard(
                 scene_number=1,
                 scene_duration_sec=30.0,
+                location_group="cafe",
                 cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
                 + [
                     _make_cut(
@@ -334,6 +340,161 @@ class TestStoryboardValidator:
                         keyframe_prompt="Steaming latte on marble counter, soft bokeh",
                         has_character=False,
                     )
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        self.validator.validate(storyboard)
+
+    def test_location_group空_エラー(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=15.0,
+                location_group="",
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 6)],
+            ),
+            SceneStoryboard(
+                scene_number=2,
+                scene_duration_sec=15.0,
+                location_group="office",
+                cuts=[
+                    _make_cut(2, i, 3.0, transition=Transition.CROSS_FADE if i == 1 else Transition.CUT)
+                    for i in range(1, 6)
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        with pytest.raises(StoryboardValidationError) as exc_info:
+            self.validator.validate(storyboard)
+        assert any("location_group" in e for e in exc_info.value.errors)
+
+    def test_location_group設定済み_正常(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=9.0,
+                location_group="bedroom",
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 4)],
+            ),
+            SceneStoryboard(
+                scene_number=2,
+                scene_duration_sec=9.0,
+                location_group="office",
+                cuts=[
+                    _make_cut(2, i, 3.0, transition=Transition.CROSS_FADE if i == 1 else Transition.CUT)
+                    for i in range(1, 4)
+                ],
+            ),
+            SceneStoryboard(
+                scene_number=3,
+                scene_duration_sec=12.0,
+                location_group="cafe",
+                cuts=[
+                    _make_cut(3, i, 3.0, transition=Transition.CROSS_FADE if i == 1 else Transition.CUT)
+                    for i in range(1, 5)
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        self.validator.validate(storyboard)
+
+    def test_同一シーン内clothing_variant混在_エラー(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=30.0,
+                location_group="home",
+                cuts=[_make_cut(1, i, 3.0) for i in range(1, 10)]
+                + [
+                    CutSpec(
+                        cut_id="scene_01_cut_10",
+                        scene_number=1,
+                        cut_number=10,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="Slow zoom-in",
+                        action_description="テスト",
+                        motion_prompt="test motion",
+                        keyframe_prompt="@char test",
+                        transition=Transition.CUT,
+                        has_character=True,
+                        clothing_variant="work",
+                    ),
+                ],
+            ),
+        ]
+        storyboard = _make_storyboard(scenes=scenes)
+        with pytest.raises(StoryboardValidationError) as exc_info:
+            self.validator.validate(storyboard)
+        assert any("clothing_variant" in e for e in exc_info.value.errors)
+
+    def test_同一シーン内clothing_variant統一_正常(self) -> None:
+        scenes = [
+            SceneStoryboard(
+                scene_number=1,
+                scene_duration_sec=9.0,
+                location_group="home",
+                cuts=[
+                    CutSpec(
+                        cut_id=f"scene_01_cut_{i:02d}",
+                        scene_number=1,
+                        cut_number=i,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="Slow zoom-in",
+                        action_description="テスト",
+                        motion_prompt="test motion",
+                        keyframe_prompt="@char test",
+                        transition=Transition.CUT,
+                        has_character=True,
+                        clothing_variant="home",
+                    )
+                    for i in range(1, 4)
+                ],
+            ),
+            SceneStoryboard(
+                scene_number=2,
+                scene_duration_sec=9.0,
+                location_group="office",
+                cuts=[
+                    CutSpec(
+                        cut_id=f"scene_02_cut_{i:02d}",
+                        scene_number=2,
+                        cut_number=i,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="Slow zoom-in",
+                        action_description="テスト",
+                        motion_prompt="test motion",
+                        keyframe_prompt="@char test",
+                        transition=Transition.CROSS_FADE if i == 1 else Transition.CUT,
+                        has_character=True,
+                        clothing_variant="work",
+                    )
+                    for i in range(1, 4)
+                ],
+            ),
+            SceneStoryboard(
+                scene_number=3,
+                scene_duration_sec=12.0,
+                location_group="cafe",
+                cuts=[
+                    CutSpec(
+                        cut_id=f"scene_03_cut_{i:02d}",
+                        scene_number=3,
+                        cut_number=i,
+                        duration_sec=3.0,
+                        motion_intensity=MotionIntensity.SUBTLE,
+                        camera_work="Slow zoom-in",
+                        action_description="テスト",
+                        motion_prompt="test motion",
+                        keyframe_prompt="@char test",
+                        transition=Transition.CROSS_FADE if i == 1 else Transition.CUT,
+                        has_character=True,
+                        clothing_variant="casual",
+                    )
+                    for i in range(1, 5)
                 ],
             ),
         ]

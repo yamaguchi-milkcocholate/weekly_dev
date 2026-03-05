@@ -147,8 +147,6 @@ def sample_assets(tmp_path: Path) -> AssetSet:
             CharacterAsset(
                 character_name="Aoi",
                 front_view=front,
-                side_view=char_dir / "side.png",
-                back_view=char_dir / "back.png",
                 identity_block="Young adult female, dark brown hair",
             )
         ],
@@ -173,15 +171,11 @@ def multi_char_assets(tmp_path: Path) -> AssetSet:
             CharacterAsset(
                 character_name="Aoi",
                 front_view=aoi_front,
-                side_view=aoi_dir / "side.png",
-                back_view=aoi_dir / "back.png",
                 identity_block="Young adult female, dark brown hair",
             ),
             CharacterAsset(
                 character_name="Saki",
                 front_view=saki_front,
-                side_view=saki_dir / "side.png",
-                back_view=saki_dir / "back.png",
                 identity_block="Young adult female, blonde hair",
             ),
         ],
@@ -434,8 +428,6 @@ class TestKeyframeEnginePersistence:
                 CharacterAsset(
                     character_name="Aoi",
                     front_view=Path("assets/character/front.png"),
-                    side_view=Path("assets/character/side.png"),
-                    back_view=Path("assets/character/back.png"),
                     identity_block="Young adult female",
                 )
             ],

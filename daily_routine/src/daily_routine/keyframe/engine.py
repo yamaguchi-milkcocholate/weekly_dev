@@ -156,6 +156,8 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
 
         for component in spec.components:
             if isinstance(component, CharacterComponent):
+                if not require_character:
+                    continue
                 char = GeminiKeyframeEngine._find_character_asset(assets, component.character, component.variant_id)
                 resolved.char_images.append(char.front_view)
                 resolved.identity_blocks.append(char.identity_block)
@@ -216,6 +218,91 @@ class GeminiKeyframeEngine(StepEngine[KeyframeInput, AssetSet], KeyframeEngineBa
             if env.scene_number == scene_number:
                 return env.image_path
         return None
+
+    # --- アイテム単位実行 ---
+
+    @property
+    def supports_items(self) -> bool:
+        """アイテム単位実行に対応する."""
+        return True
+
+    def list_items(self, input_data: KeyframeInput, project_dir: Path) -> list[str]:
+        """全カットIDをアイテムIDとして返す."""
+        return [cut.cut_id for scene in input_data.storyboard.scenes for cut in scene.cuts]
+
+    async def execute_item(self, item_id: str, input_data: KeyframeInput, project_dir: Path) -> None:
+        """指定 cut_id のキーフレーム1枚を生成し、AssetSet に追記保存する."""
+        output_dir = project_dir / "assets" / "keyframes"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 既存の AssetSet を読み込み
+        try:
+            assets = self.load_output(project_dir)
+        except FileNotFoundError:
+            assets = input_data.assets.model_copy()
+
+        # 対象カットを検索
+        target_cut = None
+        for scene in input_data.storyboard.scenes:
+            for cut in scene.cuts:
+                if cut.cut_id == item_id:
+                    target_cut = cut
+                    break
+            if target_cut:
+                break
+
+        if target_cut is None:
+            msg = f"カット '{item_id}' が Storyboard に見つかりません"
+            raise ValueError(msg)
+
+        keyframe_path = output_dir / f"{target_cut.cut_id}.png"
+
+        spec = input_data.keyframe_mapping.get_spec(target_cut.scene_number) if input_data.keyframe_mapping else None
+        resolved = self._resolve_components(assets, spec, require_character=target_cut.has_character)
+        env_image = self._resolve_environment(assets, target_cut.scene_number, spec)
+
+        pose_instruction = target_cut.pose_instruction
+        if spec and spec.pose and not pose_instruction:
+            pose_instruction = spec.pose
+
+        flash_prompt = await self._client.analyze_scene(
+            char_images=resolved.char_images,
+            env_image=env_image,
+            identity_blocks=resolved.identity_blocks,
+            pose_instruction=pose_instruction,
+            reference_images=resolved.reference_images,
+            reference_infos=resolved.reference_infos,
+        )
+
+        result_path = await self._client.generate_keyframe(
+            char_images=resolved.char_images,
+            env_image=env_image,
+            flash_prompt=flash_prompt,
+            reference_images=resolved.reference_images,
+            reference_infos=resolved.reference_infos,
+            output_path=keyframe_path,
+        )
+
+        new_keyframe = KeyframeAsset(
+            scene_number=target_cut.scene_number,
+            image_path=result_path,
+            prompt=flash_prompt,
+            cut_id=target_cut.cut_id,
+            generation_method="gemini",
+        )
+
+        # 既存の同一 cut_id のキーフレームを置換、なければ追加
+        replaced = False
+        for i, kf in enumerate(assets.keyframes):
+            if kf.cut_id == item_id:
+                assets.keyframes[i] = new_keyframe
+                replaced = True
+                break
+        if not replaced:
+            assets.keyframes.append(new_keyframe)
+
+        self.save_output(project_dir, assets)
+        logger.info("キーフレーム '%s' を生成・保存しました", item_id)
 
     def save_output(self, project_dir: Path, output: AssetSet) -> None:
         """AssetSet（keyframes 含む）を保存する."""

@@ -120,17 +120,18 @@ def resume(
 @app.command()
 def retry(
     project_id: str = typer.Argument(help="プロジェクトID"),
+    item: str | None = typer.Option(None, help="リトライするアイテムID"),
 ) -> None:
-    """エラーステップを再試行する.
+    """エラーステップまたは個別アイテムを再試行する.
 
-    ERROR状態のステップを再実行する。
+    ERROR状態のステップを再実行する。--item を指定すると個別アイテムのみ再生成する。
     """
     global_config = load_global_config()
     project_dir = get_project_dir(global_config, project_id)
 
     try:
         api_keys = _build_api_keys(global_config)
-        state = asyncio.run(retry_pipeline(project_dir, api_keys=api_keys))
+        state = asyncio.run(retry_pipeline(project_dir, api_keys=api_keys, item_id=item))
         _print_state_summary(state)
     except InvalidStateError as e:
         typer.echo(f"エラー: {e}", err=True)
@@ -303,11 +304,33 @@ def _print_state_summary(state: PipelineState) -> None:
             "error": "[x]",
         }.get(step_state.status.value, "[.]")
         line = f"  {status_icon} {step.value}: {step_state.status.value}"
+        if step_state.items:
+            completed = sum(
+                1 for i in step_state.items
+                if i.status in ("approved", "completed")
+            )
+            total = len(step_state.items)
+            line += f" ({completed}/{total} items)"
         if step_state.error:
             line += f" ({step_state.error})"
         if step_state.retry_count > 0:
             line += f" [retry: {step_state.retry_count}]"
         typer.echo(line)
+        if step_state.items:
+            for item in step_state.items:
+                item_icon = {
+                    "pending": "[ ]",
+                    "running": "[~]",
+                    "awaiting_review": "[?]",
+                    "approved": "[v]",
+                    "error": "[x]",
+                }.get(item.status, "[.]")
+                item_line = f"    {item_icon} {item.item_id}"
+                if item.item_id == step_state.current_item_id:
+                    item_line += " (current)"
+                if item.error:
+                    item_line += f" ({item.error})"
+                typer.echo(item_line)
 
 
 if __name__ == "__main__":

@@ -112,8 +112,6 @@ def _make_assets(tmp_path: Path) -> AssetSet:
             CharacterAsset(
                 character_name="花子",
                 front_view=front_view,
-                side_view=tmp_path / "side.png",
-                back_view=tmp_path / "back.png",
                 identity_block="Young adult female, dark hair",
             ),
         ],
@@ -300,15 +298,11 @@ class TestGenerateKeyframes:
                 CharacterAsset(
                     character_name="花子",
                     front_view=front_1,
-                    side_view=tmp_path / "side1.png",
-                    back_view=tmp_path / "back1.png",
                     identity_block="Hanako identity",
                 ),
                 CharacterAsset(
                     character_name="太郎",
                     front_view=front_2,
-                    side_view=tmp_path / "side2.png",
-                    back_view=tmp_path / "back2.png",
                     identity_block="Taro identity",
                 ),
             ],
@@ -357,16 +351,12 @@ class TestGenerateKeyframes:
                     character_name="花子",
                     variant_id="pajama",
                     front_view=front_pajama,
-                    side_view=tmp_path / "side_p.png",
-                    back_view=tmp_path / "back_p.png",
                     identity_block="Hanako pajama",
                 ),
                 CharacterAsset(
                     character_name="花子",
                     variant_id="suit",
                     front_view=front_suit,
-                    side_view=tmp_path / "side_s.png",
-                    back_view=tmp_path / "back_s.png",
                     identity_block="Hanako suit",
                 ),
             ],
@@ -415,16 +405,12 @@ class TestGenerateKeyframes:
                     character_name="花子",
                     variant_id="pajama",
                     front_view=front_pajama,
-                    side_view=tmp_path / "side_p.png",
-                    back_view=tmp_path / "back_p.png",
                     identity_block="Hanako pajama",
                 ),
                 CharacterAsset(
                     character_name="花子",
                     variant_id="suit",
                     front_view=front_suit,
-                    side_view=tmp_path / "side_s.png",
-                    back_view=tmp_path / "back_s.png",
                     identity_block="Hanako suit",
                 ),
             ],
@@ -667,3 +653,147 @@ class TestGenerateKeyframes:
         assert infos[1].purpose == "atmosphere"
         assert infos[1].text == "暗い雰囲気"
         assert infos[1].has_image is False
+
+    @pytest.mark.asyncio
+    async def test_has_character_false_マッピングにCharacterComponent指定でもスキップ(self, tmp_path: Path) -> None:
+        """keyframe_mapping に CharacterComponent が含まれていても has_character=False なら char_images が空."""
+        output_dir = tmp_path / "keyframes"
+        assets = _make_assets(tmp_path)
+        scenario = _make_scenario()
+        # scene 2 を has_character=False に
+        storyboard = Storyboard(
+            title="テスト動画",
+            total_duration_sec=6.0,
+            total_cuts=2,
+            scenes=[
+                SceneStoryboard(
+                    scene_number=1,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_01_cut_01",
+                            scene_number=1,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.SUBTLE,
+                            camera_work="slow zoom-in",
+                            action_description="テスト動作1",
+                            motion_prompt="@char moves slowly",
+                            keyframe_prompt="@char in a room",
+                            transition=Transition.CUT,
+                            has_character=True,
+                        ),
+                    ],
+                ),
+                SceneStoryboard(
+                    scene_number=2,
+                    scene_duration_sec=3.0,
+                    cuts=[
+                        CutSpec(
+                            cut_id="scene_02_cut_01",
+                            scene_number=2,
+                            cut_number=1,
+                            duration_sec=3.0,
+                            motion_intensity=MotionIntensity.STATIC,
+                            camera_work="static",
+                            action_description="コーヒー豆のクローズアップ",
+                            motion_prompt="Steam rises slowly",
+                            keyframe_prompt="Coffee beans on wooden table",
+                            transition=Transition.CUT,
+                            has_character=False,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        from daily_routine.schemas.keyframe_mapping import CharacterComponent
+
+        # マッピングに CharacterComponent を明示的に含める
+        keyframe_mapping = KeyframeMapping(
+            scenes=[
+                SceneKeyframeSpec(
+                    scene_number=2,
+                    components=[
+                        CharacterComponent(character="花子"),
+                    ],
+                ),
+            ]
+        )
+
+        await engine.generate_keyframes(
+            scenario=scenario,
+            storyboard=storyboard,
+            assets=assets,
+            output_dir=output_dir,
+            keyframe_mapping=keyframe_mapping,
+        )
+
+        # scene 1: has_character=True → キャラクター画像あり
+        call1 = client.analyze_scene.call_args_list[0]
+        assert len(call1.kwargs["char_images"]) == 1
+
+        # scene 2: has_character=False → マッピングに CharacterComponent があってもスキップ
+        call2 = client.analyze_scene.call_args_list[1]
+        assert call2.kwargs["char_images"] == []
+        assert call2.kwargs["identity_blocks"] == []
+
+
+class TestItemSupport:
+    """アイテム単位実行のテスト."""
+
+    def test_supports_items_True(self) -> None:
+        engine = GeminiKeyframeEngine(api_key="")
+        assert engine.supports_items is True
+
+    def test_list_items_全カットID(self, tmp_path: Path) -> None:
+        from daily_routine.schemas.pipeline_io import KeyframeInput
+
+        storyboard = _make_storyboard()
+        scenario = _make_scenario()
+        assets = _make_assets(tmp_path)
+        engine = GeminiKeyframeEngine(api_key="")
+
+        input_data = KeyframeInput(scenario=scenario, storyboard=storyboard, assets=assets)
+        items = engine.list_items(input_data, tmp_path)
+
+        assert items == ["scene_01_cut_01", "scene_02_cut_01"]
+
+    @pytest.mark.asyncio
+    async def test_execute_item_1カット生成(self, tmp_path: Path) -> None:
+        from daily_routine.schemas.pipeline_io import KeyframeInput
+
+        storyboard = _make_storyboard()
+        scenario = _make_scenario()
+        assets = _make_assets(tmp_path)
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        input_data = KeyframeInput(scenario=scenario, storyboard=storyboard, assets=assets)
+        await engine.execute_item("scene_01_cut_01", input_data, tmp_path)
+
+        result = engine.load_output(tmp_path)
+        assert len(result.keyframes) == 1
+        assert result.keyframes[0].cut_id == "scene_01_cut_01"
+
+    @pytest.mark.asyncio
+    async def test_execute_item_差分追記(self, tmp_path: Path) -> None:
+        """2回目のexecute_itemで追記されること."""
+        from daily_routine.schemas.pipeline_io import KeyframeInput
+
+        storyboard = _make_storyboard()
+        scenario = _make_scenario()
+        assets = _make_assets(tmp_path)
+        client = _make_mock_client()
+        engine = _make_engine(client)
+
+        input_data = KeyframeInput(scenario=scenario, storyboard=storyboard, assets=assets)
+        await engine.execute_item("scene_01_cut_01", input_data, tmp_path)
+        await engine.execute_item("scene_02_cut_01", input_data, tmp_path)
+
+        result = engine.load_output(tmp_path)
+        assert len(result.keyframes) == 2
+        assert result.keyframes[0].cut_id == "scene_01_cut_01"
+        assert result.keyframes[1].cut_id == "scene_02_cut_01"

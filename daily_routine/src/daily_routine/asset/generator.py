@@ -32,9 +32,6 @@ from .prompt import (
 
 logger = logging.getLogger(__name__)
 
-# キャラクターの標準ビュー
-_CHARACTER_VIEWS = ["front", "side", "back"]
-
 # 並列生成時の同時実行数上限（Gemini API レート制限対策）
 _MAX_CONCURRENCY = 3
 
@@ -422,7 +419,7 @@ class GeminiAssetGenerator(StepEngine[Scenario, AssetSet], AssetGenerator):
         """C1-F2-MA 方式でキャラクター画像を生成する.
 
         Step 1: Flash 融合分析（person + clothing → flash_description）
-        Step 2: Pro マルチアングル生成（front/side/back × 各1回、person+clothing 参照）
+        Step 2: Pro 正面画像生成（person+clothing 参照）
         Step 3: Flash Identity Block 抽出（front → identity_block）
         """
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -437,19 +434,16 @@ class GeminiAssetGenerator(StepEngine[Scenario, AssetSet], AssetGenerator):
         self._api_call_count += 1
         logger.info("Flash 融合分析完了: %s (%d文字)", character.name, len(flash_description))
 
-        # Step 2: Pro マルチアングル生成
-        view_paths: dict[str, Path] = {}
-        for view in _CHARACTER_VIEWS:
-            view_path = output_dir / f"{view}.png"
-            prompt = self._prompt_builder.build_ma_generation_prompt(flash_description, view)
-            await self._client.generate_with_reference(prompt, [person_image, clothing_image], view_path)
-            self._api_call_count += 1
-            view_paths[view] = view_path
+        # Step 2: Pro 正面画像生成
+        front_path = output_dir / "front.png"
+        prompt = self._prompt_builder.build_ma_generation_prompt(flash_description, "front")
+        await self._client.generate_with_reference(prompt, [person_image, clothing_image], front_path)
+        self._api_call_count += 1
 
         # Step 3: Flash Identity Block 抽出
         identity_block = await self._client.analyze_with_flash(
             IDENTITY_BLOCK_EXTRACTION_PROMPT,
-            [view_paths["front"]],
+            [front_path],
         )
         self._api_call_count += 1
         logger.info("Identity Block 抽出完了: %s (%d文字)", character.name, len(identity_block))
@@ -458,9 +452,7 @@ class GeminiAssetGenerator(StepEngine[Scenario, AssetSet], AssetGenerator):
         return CharacterAsset(
             character_name=character.name,
             variant_id=variant_id,
-            front_view=view_paths["front"],
-            side_view=view_paths["side"],
-            back_view=view_paths["back"],
+            front_view=front_path,
             identity_block=identity_block,
         )
 
@@ -487,27 +479,11 @@ class GeminiAssetGenerator(StepEngine[Scenario, AssetSet], AssetGenerator):
             await self._client.generate(prompt, front_path)
         self._api_call_count += 1
 
-        # 横・背面画像の生成（正面画像を参照）
-        view_paths: dict[str, Path] = {"front": front_path}
-        for view in ["side", "back"]:
-            view_path = output_dir / f"{view}.png"
-            prompt = self._prompt_builder.build_character_prompt(character, view, has_reference=True)
-
-            ref_images = [front_path]
-            if has_user_ref:
-                ref_images = [reference_image, front_path]
-
-            await self._client.generate_with_reference(prompt, ref_images, view_path)
-            self._api_call_count += 1
-            view_paths[view] = view_path
-
         logger.info("キャラクター画像生成完了: %s (variant=%s)", character.name, variant_id)
         return CharacterAsset(
             character_name=character.name,
             variant_id=variant_id,
-            front_view=view_paths["front"],
-            side_view=view_paths["side"],
-            back_view=view_paths["back"],
+            front_view=front_path,
         )
 
     async def _generate_character_with_semaphore(
@@ -601,6 +577,111 @@ class GeminiAssetGenerator(StepEngine[Scenario, AssetSet], AssetGenerator):
             image_path=output_path,
             source_type="generated",
         )
+
+    # --- アイテム単位実行 ---
+
+    @property
+    def supports_items(self) -> bool:
+        """アイテム単位実行に対応する."""
+        return True
+
+    def list_items(self, input_data: Scenario, project_dir: Path) -> list[str]:
+        """生成するアイテムIDの順序付きリストを返す.
+
+        mapping.yaml から char_{name}_{variant} 、
+        environment_seeds.yaml から env_{scene_number} を生成する。
+        """
+        reference_dir = project_dir / "assets" / "reference"
+        items: list[str] = []
+
+        # キャラクターアイテム
+        mapping = self._load_or_create_mapping(input_data.characters, reference_dir)
+        for ref_spec in mapping.characters:
+            if ref_spec.clothing_variants:
+                for variant in ref_spec.clothing_variants:
+                    items.append(f"char_{ref_spec.name}_{variant.label}")
+            else:
+                items.append(f"char_{ref_spec.name}_default")
+
+        # 環境アイテム
+        seeds_path = reference_dir / "environment_seeds.yaml"
+        if seeds_path.exists():
+            env_seeds = self._load_environment_seeds(seeds_path)
+            for seed in env_seeds.environments:
+                items.append(f"env_{seed.scene_number}")
+
+        return items
+
+    async def execute_item(self, item_id: str, input_data: Scenario, project_dir: Path) -> None:
+        """1アイテムを生成し、AssetSet に追記保存する."""
+        if self._client is None:
+            msg = "Gemini API キーが設定されていません"
+            raise ValueError(msg)
+
+        output_dir = project_dir / "assets"
+        reference_dir = output_dir / "reference"
+
+        # 既存の AssetSet を読み込み（なければ空で作成）
+        try:
+            asset_set = self.load_output(project_dir)
+        except FileNotFoundError:
+            asset_set = AssetSet(characters=[], environments=[])
+
+        if item_id.startswith("char_"):
+            # char_{name}_{variant} からパース
+            parts = item_id.split("_", 1)[1]  # "name_variant"
+            # 最後の "_" で分割して variant を取得
+            last_underscore = parts.rfind("_")
+            char_name = parts[:last_underscore]
+            variant_label = parts[last_underscore + 1:]
+
+            mapping = self._load_or_create_mapping(input_data.characters, reference_dir)
+            char_refs = await self._resolve_and_prepare_references(mapping, input_data.characters, reference_dir)
+
+            char_spec = next((c for c in input_data.characters if c.name == char_name), None)
+            if char_spec is None:
+                msg = f"キャラクター '{char_name}' が Scenario に見つかりません"
+                raise ValueError(msg)
+
+            person_path, clothing_map = char_refs[char_name]
+            clothing_path = clothing_map.get(variant_label)
+            if clothing_path is None:
+                msg = f"衣装バリアント '{variant_label}' が見つかりません: {char_name}"
+                raise ValueError(msg)
+
+            new_char = await self.generate_character(
+                char_spec,
+                output_dir / "character" / char_name / variant_label,
+                person_image=person_path,
+                clothing_image=clothing_path,
+                variant_id=variant_label,
+            )
+            asset_set.characters.append(new_char)
+
+        elif item_id.startswith("env_"):
+            scene_number = int(item_id.split("_", 1)[1])
+
+            seeds_path = reference_dir / "environment_seeds.yaml"
+            env_seeds = self._load_environment_seeds(seeds_path)
+            seed = next((s for s in env_seeds.environments if s.scene_number == scene_number), None)
+            if seed is None:
+                msg = f"scene_number={scene_number} に対応する環境シードが見つかりません"
+                raise ValueError(msg)
+
+            env_reference_dir = reference_dir / "environments"
+            new_env = await self._generate_single_environment(
+                seed=seed,
+                scenes=input_data.scenes,
+                env_reference_dir=env_reference_dir,
+                output_dir=output_dir / "environments",
+            )
+            asset_set.environments.append(new_env)
+
+        else:
+            msg = f"未知のアイテムIDプレフィクス: {item_id}"
+            raise ValueError(msg)
+
+        self.save_output(project_dir, asset_set)
 
     # --- ユーティリティ ---
 
