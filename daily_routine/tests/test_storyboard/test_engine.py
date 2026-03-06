@@ -75,7 +75,6 @@ def _make_storyboard() -> Storyboard:
             SceneStoryboard(
                 scene_number=1,
                 scene_duration_sec=15.0,
-                location_group="bedroom",
                 cuts=[
                     CutSpec(
                         cut_id=f"scene_01_cut_{i:02d}",
@@ -95,7 +94,6 @@ def _make_storyboard() -> Storyboard:
             SceneStoryboard(
                 scene_number=2,
                 scene_duration_sec=15.0,
-                location_group="station",
                 cuts=[
                     CutSpec(
                         cut_id="scene_02_cut_01",
@@ -129,7 +127,6 @@ def _make_storyboard() -> Storyboard:
             SceneStoryboard(
                 scene_number=3,
                 scene_duration_sec=15.0,
-                location_group="office",
                 cuts=[
                     CutSpec(
                         cut_id="scene_03_cut_01",

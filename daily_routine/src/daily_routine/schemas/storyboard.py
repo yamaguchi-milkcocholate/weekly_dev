@@ -49,10 +49,6 @@ class SceneStoryboard(BaseModel):
 
     scene_number: int = Field(description="シーン番号")
     scene_duration_sec: float = Field(description="シーン全体の尺（カットの合計）")
-    location_group: str = Field(
-        default="",
-        description="ロケーショングループID（同じ背景を共有するシーンに同じIDを付与。例: 'bedroom', 'office', 'cafe'）",
-    )
     cuts: list[CutSpec] = Field(description="カットリスト")
 
 

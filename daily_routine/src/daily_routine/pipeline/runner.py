@@ -641,17 +641,6 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
         logger.warning("Storyboard または AssetSet が見つからないため、keyframe_mapping の自動生成をスキップします")
         return
 
-    # location_group → scene_number[] マップ構築
-    group_to_scenes: dict[str, list[int]] = {}
-    for sb_scene in storyboard.scenes:
-        if sb_scene.location_group:
-            group_to_scenes.setdefault(sb_scene.location_group, []).append(sb_scene.scene_number)
-
-    # scene_number → location_group マップ構築
-    scene_to_group: dict[int, str] = {}
-    for sb_scene in storyboard.scenes:
-        scene_to_group[sb_scene.scene_number] = sb_scene.location_group
-
     scenes: list[dict] = []
     seen_scene_numbers: set[int] = set()
 
@@ -699,19 +688,6 @@ def _auto_generate_keyframe_mapping(project_dir: Path) -> None:
                 environment = env.description
                 break
 
-        # Step 2: 同じ location_group 内の他シーンから environment を検索
-        if not environment and scene.scene_number in scene_to_group:
-            group = scene_to_group[scene.scene_number]
-            sibling_scenes = group_to_scenes.get(group, [])
-            for sibling_sn in sibling_scenes:
-                if sibling_sn == scene.scene_number:
-                    continue
-                for env in assets.environments:
-                    if env.scene_number == sibling_sn:
-                        environment = env.description
-                        break
-                if environment:
-                    break
         pose = ""
         if scene.cuts:
             pose = scene.cuts[0].pose_instruction

@@ -115,14 +115,7 @@ class StoryboardValidator:
                     f"トランジションを cross_fade にしてください（現在: {first_cut.transition}）"
                 )
 
-        # 12. location_group が全シーンに設定されていること
-        for scene in storyboard.scenes:
-            if not scene.location_group:
-                errors.append(
-                    f"シーン {scene.scene_number} の location_group が空です。ロケーショングループを設定してください"
-                )
-
-        # 13. 同一シーン内のカットが同じ clothing_variant を持つこと
+        # 12. 同一シーン内のカットが同じ clothing_variant を持つこと
         for scene in storyboard.scenes:
             variants_in_scene = {cut.clothing_variant for cut in scene.cuts if cut.has_character}
             if len(variants_in_scene) > 1:

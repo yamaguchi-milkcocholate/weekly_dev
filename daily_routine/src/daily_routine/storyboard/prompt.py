@@ -191,11 +191,7 @@ overhead shot, film grain, muted earth tones.
     - 冒頭: シーン1の最初のカットに fade_in を設定
     - エンディング: 最終カットに fade_out を設定
 12. cut_id は scene_{NN}_cut_{NN} 形式（例: scene_01_cut_01, scene_02_cut_03）
-13. **location_group**: 同じロケーション（背景）を共有するシーンには同じ location_group を設定する
-    - シナリオの背景(image_prompt)が同じ場所を指すシーンには同じグループ名を使う
-    - グループ名は英語の簡潔な名前（例: "bedroom", "office", "cafe", "street"）
-    - 全シーンが異なるロケーションでも、各シーンに location_group を設定する
-14. **clothing_variant**: キャラクターがシーンによって異なる服装を着用する場合、clothing_variant でバリアントを識別する
+13. **clothing_variant**: キャラクターがシーンによって異なる服装を着用する場合、clothing_variant でバリアントを識別する
     - シーンの状況（situation）から自然に推定する（例: 自宅シーン→"home", オフィスシーン→"work"）
     - 全シーンで同じ服装の場合は "default" を使用する
     - ラベルは英語の簡潔な名前（home, work, casual, formal, pajama 等）
