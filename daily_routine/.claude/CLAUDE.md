@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-「〇〇の一日」AI動画生成自動化パイプライン。YouTube Shorts（9:16, 1080x1920）を自動生成する。
-6層アーキテクチャ: Intelligence → Scenario → Asset → Visual → Audio → Post-Production
-パイプラインはコア/プランニング分離設計。Planning（Intelligence→Scenario→Storyboard）と Production Core（Asset→Keyframe→Visual→Audio）を独立実行可能。
+「リアル制約 × AI創造」の掛け算で価値を生むAIパイプライン基盤。リアル空間の制約を忠実にデジタル化し、AIがその制約の中で創造・予測する。パイプラインの入口（データ取得方法）を差し替えることで、空間デザイン・フィジカルAI等の領域に横展開する設計。
+
+### 実行モデル: Claude Code as Processing Engine
+
+Claude Codeを処理エンジンとして使用する。ユーザーがClaude Codeに自然言語で指示し、Claude Codeがスクリプト実行・外部API呼び出し・ファイル操作を判断・実行する。
+
+- **スキル**: `.claude/skills/` に定義。Claude Codeが必要に応じて呼び出す
+- **スクリプト**: `scripts/` に定義。`uv run` で実行する
 
 ## コマンド
 
@@ -24,47 +29,22 @@ uv run ruff check .                    # リントチェック
 uv run ruff format --check .           # フォーマットチェック
 uv run ruff check --fix .              # リント自動修正
 uv run ruff format .                   # フォーマット自動修正
-
-# CLI実行
-uv run daily-routine run "OLの一日"            # フル8ステップ
-uv run daily-routine plan "OLの一日"           # プランニングのみ（Intelligence→Scenario→Storyboard）
-uv run daily-routine produce <project-id>      # プロダクションのみ（Asset→Keyframe→Visual→Audio）
-uv run daily-routine init "検索キーワード"
-uv run daily-routine status "project-id"
 ```
 
 ## アーキテクチャ
 
 ```
-src/daily_routine/
-├── cli/            # Typer CLIレイヤー（エントリーポイント）
-├── schemas/        # Pydanticデータモデル（レイヤー間データ受け渡し）
-├── config/         # 設定管理（YAML + 環境変数オーバーライド）
-├── pipeline/       # パイプラインオーケストレーション（非同期、チェックポイント対応）
-├── intelligence/   # トレンド分析エンジン
-├── scenario/       # シナリオ生成エンジン
-├── asset/          # アセット生成（画像）
-├── visual/         # 映像生成（Image-to-Video）
-├── audio/          # 音声エンジン（BGM + SE）
-└── postproduction/ # ポストプロダクション（動画合成）
-
-poc/                # PoC・技術検証用（本番パッケージに含めない）
-tests/              # テストコード
+poc/                # PoC・技術検証用
+scripts/            # ユーティリティスクリプト
 docs/
 ├── specs/          # 仕様書（何を作るか）
 ├── designs/        # 設計書（どうやって作るか）
 ├── adrs/           # ADR（何を採用したか）
-├── guidelines/                 # 開発ガイドライン
-├── procedures/                 # 手順書
-└── image_gen_best_practices/   # 画像生成タスク別ベストプラクティス（PoC知見の蓄積）
+├── guidelines/     # 開発ガイドライン
+├── procedures/     # 手順書
+├── image_gen_best_practices/  # 画像生成タスク別ベストプラクティス
+└── memo/           # メモ・検討資料
 ```
-
-**重要な設計原則:**
-
-- レイヤー間の依存は `schemas/` を介して行い、レイヤー同士の直接インポートは禁止
-- レイヤー境界は `ABC` + `@abstractmethod` で定義
-- 外部API呼び出しは `async/await` + `httpx`
-- 設定は YAML + Pydantic、APIキーは環境変数（`DAILY_ROUTINE_API_KEY_{NAME}`）
 
 ## コーディング規約
 
@@ -90,3 +70,4 @@ docs/
 
 - 画像・動画生成プロンプトを作成・レビューする際は `/docs/guidelines/visual_prompt.md` を必ず参照すること
 - 画像生成の手法選定・パイプライン設計時は `/docs/image_gen_best_practices/` のタスク別ベストプラクティスを参照すること
+- Blender Python（bpy）をCLIから実行する際は `blender-python` スキルを参照すること。`blender` コマンドの直接呼び出しは禁止（bundled Pythonの解決に失敗する）。必ず `scripts/run_blender.sh` ラッパー経由で実行する
