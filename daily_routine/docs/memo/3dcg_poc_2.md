@@ -59,11 +59,11 @@ PoCではパターンAから検証し、成功後にパターンBへ進む。
 
 ### Step 1: ECサイト商品画像からアセットを取得できるか（パターンA）
 
-- [ ] インテリアECサイトからサンプル商品画像を収集する（ソファ・テーブル・椅子など）
-- [ ] 商品画像（単体・白背景）からオブジェクトの3Dデータを生成できる
-- [ ] 生成した3Dデータを目視で確認する
+- [x] インテリアECサイトからサンプル商品画像を収集する（ソファ・テーブル・椅子など）
+- [x] 商品画像（単体・白背景）からオブジェクトの3Dデータを生成できる
+- [x] 生成した3Dデータを目視で確認する
   - オブジェクトの形状が元の画像と概ね一致しているか
-- [ ] 3D空間に挿入可能な形式で出力できる
+- [x] 3D空間に挿入可能な形式で出力できる
 
 ### Step 2: 別部屋の写真からアセットを取得できるか（パターンB）
 
@@ -96,3 +96,141 @@ PoCではパターンAから検証し、成功後にパターンBへ進む。
 - パターンA・B間の形状精度の比較考察
 - カテゴリ分類の精度と課題の考察
 - 次のステップ（AIによるレイアウト提案・3D空間への挿入）への接続方針
+
+---
+
+## 技術調査
+
+### 1. 画像 → 3Dモデル生成
+
+#### 1-1. 商用API（SaaS）
+
+| サービス | 特徴 | 出力形式 | 料金目安 | API |
+| --- | --- | --- | --- | --- |
+| [Meshy AI](https://www.meshy.ai/) | 業界最大手。Image-to-3D + PBRマップ（metallic, roughness, normal）生成。品質・速度のバランスが良い | GLB, FBX, OBJ, USDZ | Pro $16/月（1,000クレジット≒100アセット） | REST API（Pro以上） |
+| [Tripo AI](https://www.tripo3d.ai/) | 高速・スケーラブル。自動背景除去。マルチ画像対応 | GLB, FBX, OBJ, USD, STL | Free〜Premium $111.9/月 | REST API |
+| [Rodin AI (Hyper3D)](https://hyper3d.ai/) | 最高品質のフォトリアル3Dモデル。Gen-2で4倍のメッシュ品質改善。18K/50Kクアッドトポロジー。PBR素材対応 | GLB, FBX, OBJ | 要問合せ | REST API |
+| [3D AI Studio](https://www.3daistudio.com/) | 複数AIモデルへのアクセスを提供。ベンダーロックイン回避 | GLB, FBX, OBJ | Maker $20/月〜 | REST API + Discord |
+
+**PoCでの推奨:** Meshy AI または Tripo AI。APIが整備されており、GLB出力で後工程に接続しやすい。品質重視ならRodin AIも候補。
+
+#### 1-2. オープンソース（セルフホスト）
+
+| モデル | 開発元 | 特徴 | 速度 | 備考 |
+| --- | --- | --- | --- | --- |
+| [TripoSR](https://github.com/VAST-AI-Research/TripoSR) | Tripo AI + Stability AI | 単一画像から高速3D再構築。エコシステムが成熟 | サブ秒 | 速度重視。プラグインが豊富 |
+| [SF3D (Stable Fast 3D)](https://github.com/Stability-AI/stable-fast-3d) | Stability AI | TripoSRの進化版。UV展開・照明分離・PBR素材予測。メッシュ品質が高い | TripoSRより若干遅い | 品質重視。360°4画像入力で安定 |
+| [SPAR3D](https://github.com/Stability-AI/stable-point-aware-3d) | Stability AI | 点群条件付けで再構築品質を向上 | SF3Dと同等 | SF3Dの発展形 |
+| [InstantMesh](https://github.com/TencentARC/InstantMesh) | Tencent ARC | スパースビュー大規模再構築モデル。テクスチャがシャープ | 約10秒 | テクスチャ品質重視 |
+| [SAM 3D Objects](https://github.com/facebookresearch/sam-3d-objects) | Meta | 単一画像からジオメトリ・テクスチャ・レイアウトを再構築。遮蔽・クラッタに強い。OBJ/FBX/GLB出力 | - | 家具のような実世界オブジェクトに強い。Facebook Marketplace「View in Room」で実用済み |
+| [Unique3D](https://wukailu.github.io/Unique3D/) | 研究 | 高品質・効率的な単一画像3Dメッシュ生成 | - | 研究段階 |
+
+**PoCでの推奨:** パターンA（白背景の商品画像）には TripoSR or SF3D が最適。パターンB（部屋写真からの切り出し）には SAM 3D Objects が遮蔽処理に強く有望。
+
+#### 1-3. 3D Gaussian Splatting系（参考）
+
+| モデル | 開発元 | 特徴 |
+| --- | --- | --- |
+| [SHARP](https://9to5mac.com/2025/12/17/apple-sharp-ai-model-turns-2d-photos-into-3d-views/) | Apple | 単一画像から1秒未満でGaussian Splatting表現を生成。オープンソース |
+| [GGS (Generative Gaussian Splatting)](https://katjaschwarz.github.io/ggs/) | 研究 | 動画拡散モデルを利用して3D放射場を直接生成 |
+| [Splatt3R](https://splatt3r.active.vision/) | 研究 | キャリブレーション不要の画像ペアからゼロショットGaussian Splatting |
+
+**注意:** Gaussian Splattingはメッシュではなく点群ベースの表現。従来の3Dアセット（GLB/OBJ）としてそのまま利用するにはメッシュ変換が必要。今回のPoCではメッシュ出力が直接得られるツールを優先する。
+
+---
+
+### 2. 画像内オブジェクト認識・セグメンテーション（パターンB向け）
+
+パターンBでは部屋写真から家具を検出・切り出す必要がある。以下の組み合わせが有力。
+
+#### 2-1. 検出 + セグメンテーションのパイプライン
+
+| アプローチ | 構成 | 特徴 |
+| --- | --- | --- |
+| **YOLO + SAM2** | [YOLOv8/v11](https://docs.ultralytics.com/models/sam-2/)で家具を検出 → [SAM2](https://github.com/facebookresearch/sam2)でピクセル精度のセグメンテーション | 実績あり。家具YOLOデータセットで学習済みモデルが存在。リアルタイム推論（44fps） |
+| **YOLO-World + SAM2** | [YOLO-World](https://docs.ultralytics.com/models/yolo-world/)（ゼロショット検出）→ SAM2 | 事前学習不要で任意のカテゴリを検出可能。「sofa」「table」等のテキストプロンプトで検出 |
+| **VLM + SAM2** | GPT-4o/Claude等のVLMでカテゴリ分類 → SAM2でセグメンテーション | VLMがカテゴリ判定・不要物除外を担当。最も柔軟だが座標精度はYOLOに劣る |
+
+**PoCでの推奨:** YOLO-World + SAM2の組み合わせ。ゼロショットで家具カテゴリを検出でき、学習データ不要。VLMは補助的にカテゴリ分類・フィルタリングに使う。
+
+#### 2-2. 家具向けデータセット（参考）
+
+| データセット | 説明 |
+| --- | --- |
+| [HomeObjects-3K](https://docs.ultralytics.com/datasets/detect/homeobjects-3k/) | 12カテゴリの家庭内オブジェクト検出用。YOLO形式 |
+| [Furniture Segmentation Dataset](https://github.com/maher-mohsen/Furniture-Segmentation) | 建築シーン内の家具セグメンテーション用 |
+
+---
+
+### 3. 3Dデータ出力形式
+
+| 形式 | 特徴 | 用途 |
+| --- | --- | --- |
+| **GLB (glTF Binary)** | コンパクト（FBXの50-80%）。Web/AR標準。Three.js等で直接読み込み可 | **推奨**: Web表示・AR・後工程への受け渡し |
+| **OBJ** | テキストベースで可読。ほぼ全ツール互換。アニメーション非対応 | 検証・デバッグ用 |
+| **FBX** | Unity/Unreal対応。アニメーション・リギング対応 | ゲームエンジン統合時 |
+| **USD** | Pixar開発。シーン記述に強い。Apple/NVIDIA推進 | 将来的なシーン構成用 |
+
+**PoCでの推奨:** GLBを標準出力とする。Web表示で即確認でき、後工程（3D空間への挿入）にもそのまま使える。
+
+---
+
+### 4. 検証結果（パターンA）
+
+**使用サービス:** Tripo AI（REST API）
+**出力形式:** GLB（PBRテクスチャ付き）
+**検証日:** 2026-03-15〜2026-03-17
+
+#### 検証フロー
+
+```
+ローカル画像 → Tripo API（upload） → image_token取得
+           → Tripo API（image_to_model） → task_id取得
+           → ポーリング（約60〜85秒） → GLBダウンロード
+           → Blender File > Import > glTF 2.0 で挿入
+```
+
+#### 検証結果
+
+| 入力画像 | オブジェクト | GLBサイズ | 形状再現 | 備考 |
+| --- | --- | --- | --- | --- |
+| desk.png | スタンディングデスク | 10 MB | 良好 | 天板・脚部が正確に再現 |
+| counter.png | カウンター（引き戸付き） | 14 MB | 良好 | 引き戸・棚の構造まで再現 |
+| dining_table.png | ダイニングテーブルセット | 13 MB | 良好 | テーブル+椅子+食器が一体化（※） |
+| chair.png | オフィスチェア | 12 MB | 良好 | ヘッドレスト・キャスターまで再現 |
+| closet.png | クローゼット | 15 MB | 良好 | 衣類・バッグも含めて3D化 |
+
+※ dining_table: 複数オブジェクトが写った画像は一体のオブジェクトとして3D化される。個別の家具として使うにはオブジェクトごとに分けた画像が必要。
+
+#### 合格判定
+
+| 評価項目 | 結果 | 判定 |
+| --- | --- | --- |
+| 形状の妥当性 | 全5オブジェクトで元画像と概ね一致 | **合格** |
+| 次ステップへの接続 | GLB形式でBlenderにインポート・配置可能を確認 | **合格** |
+
+#### 注意点・課題
+
+- **1画像1オブジェクト**: Tripo AIは画像内の全要素を1つのメッシュとして3D化する。部屋写真からの家具個別抽出にはパターンBの前処理（検出・セグメンテーション）が必須
+- **クレジット消費**: 1オブジェクトあたり約1タスク分のクレジットを消費
+- **生成時間**: 1オブジェクトあたり約60〜85秒
+
+#### 検証スクリプト
+
+`poc/3dcg_poc2/tripo_image_to_3d.py`
+
+---
+
+### 5. 技術選定まとめ
+
+```
+パターンA（ECサイト商品画像 → 3Dアセット）:
+  商品画像 → [Meshy API or TripoSR] → GLBアセット
+
+パターンB（部屋写真 → 家具切り出し → 3Dアセット）:
+  部屋写真 → [YOLO-World] 家具検出
+           → [SAM2] セグメンテーション・切り出し
+           → [VLM] カテゴリ分類・ユーザー提示
+           → ユーザー選択
+           → [Meshy API or SAM 3D Objects] → GLBアセット
+```

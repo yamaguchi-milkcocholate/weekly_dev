@@ -4,3 +4,6 @@ seamless/generated/**
 seamless/reference/**
 keyframe_no_char_verify_output/**
 keyframe_style_continuity_output/**
+3dcg_poc1/generated/
+3dcg_poc*/input/
+3dcg_poc*/output/
