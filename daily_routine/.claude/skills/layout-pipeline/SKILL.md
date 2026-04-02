@@ -11,8 +11,8 @@ argument-hint: [出力ディレクトリ]
 ## パイプライン全体図
 
 ```
-Phase 1: .blend → SVG + walls.json
-    │  スキル: /floor-plan-extract
+Phase 1: PNG → SVG → 要素別SVG
+    │  スキル: /floor-plan-trace → /floor-plan-elements
     ▼
 Phase 2-3: SVG → drawio → room_info.json + floor_plan_complete.svg
     │  スキル: /layout-floor-plan-annotate → (手作業) → /layout-floor-plan-annotate integrate
