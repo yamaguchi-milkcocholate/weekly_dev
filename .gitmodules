@@ -1,3 +1,0 @@
-[submodule "clip_automation/dify"]
-	path = clip_automation/dify
-	url = https://github.com/langgenius/dify.git
