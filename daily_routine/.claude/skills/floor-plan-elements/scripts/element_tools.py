@@ -262,7 +262,7 @@ def cmd_template(png_path: Path, output_dir: Path) -> None:
     image_elem.set("opacity", "0.3")
 
     # カテゴリ別グループ
-    for group_id in ("walls", "pillars", "doors", "fixtures"):
+    for group_id in ("walls", "pillars", "doors", "glass_doors", "windows", "fixtures"):
         g = ET.SubElement(root, f"{{{SVG_NS}}}g")
         g.set("id", group_id)
 
