@@ -154,7 +154,7 @@ Loose Partsで分離した39オブジェクトに対し、BBox（幅・奥行・
 | ファイル | 形式 | 用途 |
 |---|---|---|
 | `{stem}.blend` | Blender native | Blender GUIでの確認・編集。カメラ・ライト含む |
-| `{stem}.glb` | glTF Binary | 後続パイプライン（layout-render等）やWebビューワーでの利用。`bpy.ops.export_scene.gltf()` で出力 |
+| `{stem}.glb` | glTF Binary | 後続パイプライン（floor_plan_to_video_sub_render等）やWebビューワーでの利用。`bpy.ops.export_scene.gltf()` で出力 |
 
 ### 期待される効果
 

@@ -140,9 +140,9 @@ Blender GUIで微調整し、確定版を保存。
 
 ## 修正履歴
 
-### Patch 3: blender-placementスキルによる再実行（2026-03-29）
+### Patch 3: floor_plan_to_video_sub_placementスキルによる再実行（2026-03-29）
 
-スキル化された`blender-placement`で`poc/3dcg_poc4/output_test`に再配置を実行。
+スキル化された`floor_plan_to_video_sub_placement`で`poc/3dcg_poc4/output_test`に再配置を実行。
 Patch 1-2で発覚した問題がスキル側のスクリプトで全て解消されていることを確認。
 
 **front方向の判定結果（スケール比率による検証済み）:**

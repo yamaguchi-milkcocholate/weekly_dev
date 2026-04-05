@@ -1,8 +1,8 @@
-# PoC0: floor-plan-to-elements 統合パイプライン検証
+# PoC0: floor_plan_to_video_sub_extract 統合パイプライン検証
 
 ## 概要
 
-`floor-plan-to-elements` スキルの動作検証。カラーPNG間取り画像から壁・柱の要素別SVGまでを一気通貫で生成する統合パイプラインの初回実行。
+`floor_plan_to_video_sub_extract` スキルの動作検証。カラーPNG間取り画像から壁・柱の要素別SVGまでを一気通貫で生成する統合パイプラインの初回実行。
 
 ## 検証内容
 
@@ -12,12 +12,12 @@
 
 ### 実行したスキル
 
-`/floor-plan-to-elements poc/3dcg_poc0/1`
+`/floor_plan_to_video_sub_extract poc/3dcg_poc0/1`
 
 内部で以下の2スキルを順次実行:
 
-1. **Phase 1: floor-plan-trace** — カラーPNG → potrace → フィルタリング → クリーンSVG
-2. **Phase 2: floor-plan-elements** — クリーンSVG → PNG化 → ピクセル分析 → 壁・柱rect配置
+1. **Phase 1: floor_plan_to_video_sub_trace** — カラーPNG → potrace → フィルタリング → クリーンSVG
+2. **Phase 2: floor_plan_to_video_sub_elements** — クリーンSVG → PNG化 → ピクセル分析 → 壁・柱rect配置
 
 ### 出力
 
@@ -35,13 +35,13 @@
 
 ## 結果
 
-### Phase 1: floor-plan-trace
+### Phase 1: floor_plan_to_video_sub_trace
 
 - 動的閾値選択で最適な閾値を自動判定
 - テキスト（「洋室」「LDK」等）、家具アイコン、方位記号を除去
 - 壁線・ドア弧・柱の構造要素のみ残した
 
-### Phase 2: floor-plan-elements
+### Phase 2: floor_plan_to_video_sub_elements
 
 - 4イテレーションで壁・柱を配置
   - Iteration 1: 外壁
@@ -87,7 +87,7 @@ poc/3dcg_poc0/1/
 
 ## 技術的な処理の流れ
 
-### Phase 1: floor-plan-trace（カラーPNG → クリーンSVG）
+### Phase 1: floor_plan_to_video_sub_trace（カラーPNG → クリーンSVG）
 
 ```
 カラーPNG間取り画像
@@ -126,7 +126,7 @@ poc/3dcg_poc0/1/
 
 **ポイント**: potraceは「面の塗りつぶし」（even-odd fill rule）でSVGを生成する。壁・ドア弧・柱が接触していると1つの複合パスに結合されるため、パスレベルでの個別分離は構造的に不可能。ここではパス単位の粗い除去（テキストや家具の塊を除去）のみ行い、個別要素の分離はPhase 2で別アプローチを取る。
 
-### Phase 2: floor-plan-elements（クリーンSVG → 要素別rect SVG）
+### Phase 2: floor_plan_to_video_sub_elements（クリーンSVG → 要素別rect SVG）
 
 ```
 クリーンSVG（Phase 1出力）
@@ -188,6 +188,6 @@ poc/3dcg_poc0/1/
 
 | スキル                 | パス                                             |
 | ---------------------- | ------------------------------------------------ |
-| floor-plan-to-elements | `.claude/skills/floor-plan-to-elements/SKILL.md` |
-| floor-plan-trace       | `.claude/skills/floor-plan-trace/SKILL.md`       |
-| floor-plan-elements    | `.claude/skills/floor-plan-elements/SKILL.md`    |
+| floor_plan_to_video_sub_extract | `.claude/skills/floor_plan_to_video_sub_extract/SKILL.md` |
+| floor_plan_to_video_sub_trace       | `.claude/skills/floor_plan_to_video_sub_trace/SKILL.md`       |
+| floor_plan_to_video_sub_elements    | `.claude/skills/floor_plan_to_video_sub_elements/SKILL.md`    |

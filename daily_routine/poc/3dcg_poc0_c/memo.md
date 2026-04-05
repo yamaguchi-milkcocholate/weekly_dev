@@ -115,7 +115,7 @@ ffmpeg -y -framerate 30 -i <cut_dir>/%04d.png \
 
 ## スキル化
 
-PoC 0_cのワークフローを `v2v-camera-cuts` スキル（`.claude/skills/v2v-camera-cuts/`）として汎用化済み。
+PoC 0_cのワークフローを `floor_plan_to_video_sub_camera` スキル（`.claude/skills/floor_plan_to_video_sub_camera/`）として汎用化済み。
 
 主な変更点:
 - 旧4ステップ（始点カメラ→カット設計→レンダリング→動画化）→ **3フェーズ**に統合（キーポイントカメラを削除し、空間分析+カット設計を1フェーズに）
@@ -175,7 +175,7 @@ PoC 0_cのワークフローを `v2v-camera-cuts` スキル（`.claude/skills/v2
 
 ## 成果物
 
-### スキル実行（v2v-camera-cuts）による出力
+### スキル実行（floor_plan_to_video_sub_camera）による出力
 
 - `output/room_bounds.json` — 壁座標・部屋境界データ
 - `output/overhead.png` — 俯瞰レンダリング画像（1920×3969）

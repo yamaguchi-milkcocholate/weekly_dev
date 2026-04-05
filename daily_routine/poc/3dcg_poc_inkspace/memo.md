@@ -73,12 +73,12 @@ magick input/madori_1ldk.png -colorspace Gray -threshold 70% pbm:- | potrace -s 
 ### 背景
 
 上記の手動変換手順（閾値の決定 → ImageMagick 2値化 → potrace変換 → プレビュー生成 → 比較評価）は、毎回同じ判断フローを辿る定型作業である。
-これをClaude Codeのスキル（`.claude/skills/floor-plan-trace/SKILL.md`）として定義し、自然言語の指示だけで一連のパイプラインを実行できるようにした。
+これをClaude Codeのスキル（`.claude/skills/floor_plan_to_video_sub_trace/SKILL.md`）として定義し、自然言語の指示だけで一連のパイプラインを実行できるようにした。
 
 ### スキルの仕組み
 
 ```
-ユーザー: "/floor-plan-trace @input/madori_1ldk_2.png"
+ユーザー: "/floor_plan_to_video_sub_trace @input/madori_1ldk_2.png"
     ↓
 Claude Code が SKILL.md の手順に従い自動実行:
     1. 入力画像を読み取り、特性を分析（壁線の太さ、背景色、ノイズ等）
@@ -132,7 +132,7 @@ Claude Code が SKILL.md の手順に従い自動実行:
 
 | 項目 | 手動実行 | スキル自動化 |
 |---|---|---|
-| 実行方法 | コマンドを手打ち、閾値を試行錯誤 | `/floor-plan-trace @画像パス` の一言 |
+| 実行方法 | コマンドを手打ち、閾値を試行錯誤 | `/floor_plan_to_video_sub_trace @画像パス` の一言 |
 | 閾値判断 | 経験に基づく手動選択 | 画像特性を分析し適応的に決定 |
 | 比較評価 | 目視で個別確認 | 自動で比較表を生成・推奨 |
 | 所要時間 | 15-20分/画像 | 1-2分/画像 |

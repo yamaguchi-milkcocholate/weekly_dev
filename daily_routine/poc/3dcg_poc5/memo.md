@@ -94,12 +94,12 @@ scripts/run_blender.sh --background poc/3dcg_poc4/output/scene.blend \
 
 ### 目的
 
-PoC5の手順を `blender-camera-render` スキルとして汎用化し、任意の `scene.blend` + `camera_positions.json` から再現可能にする。
+PoC5の手順を `floor_plan_to_video_sub_multiview` スキルとして汎用化し、任意の `scene.blend` + `camera_positions.json` から再現可能にする。
 
 ### スキル構成
 
 ```text
-.claude/skills/blender-camera-render/
+.claude/skills/floor_plan_to_video_sub_multiview/
 ├── SKILL.md                    ← スキル定義
 └── scripts/
     ├── extract_cameras.py      ← カメラ位置抽出
@@ -126,11 +126,11 @@ PoC5固有のパスに依存せず、**任意の作業ディレクトリ**で動
 ```bash
 # カメラ位置抽出
 scripts/run_blender.sh --background <work_dir>/scene.blend \
-  --python .claude/skills/blender-camera-render/scripts/extract_cameras.py -- <work_dir>
+  --python .claude/skills/floor_plan_to_video_sub_multiview/scripts/extract_cameras.py -- <work_dir>
 
 # 一括レンダリング
 scripts/run_blender.sh --background <work_dir>/scene.blend \
-  --python .claude/skills/blender-camera-render/scripts/render_cameras.py -- <work_dir>
+  --python .claude/skills/floor_plan_to_video_sub_multiview/scripts/render_cameras.py -- <work_dir>
 ```
 
 スクリプト内では `sys.argv` から `work_dir` を受け取り、入出力パスを組み立てる。`bpy.data.filepath` からの相対パス計算は行わない。
@@ -149,15 +149,15 @@ scripts/run_blender.sh --background <work_dir>/scene.blend \
 
 ### 既存スキルとの関係
 
-- `blender-placement` スキルの **後工程** として位置づけ
-- `blender-placement` が `scene.blend` を生成 → `blender-camera-render` がレンダリング
-- `blender-placement` の Phase 4（配置確認レンダリング）は簡易版（top/persp 2枚）。本スキルはユーザー定義の任意カメラ位置から詳細レンダリングを行う
+- `floor_plan_to_video_sub_placement` スキルの **後工程** として位置づけ
+- `floor_plan_to_video_sub_placement` が `scene.blend` を生成 → `floor_plan_to_video_sub_multiview` がレンダリング
+- `floor_plan_to_video_sub_placement` の Phase 4（配置確認レンダリング）は簡易版（top/persp 2枚）。本スキルはユーザー定義の任意カメラ位置から詳細レンダリングを行う
 
 ### skill-creator への入力
 
 skill-creator に以下を渡してスキルを生成する:
 
 - **参考実装**: `poc/3dcg_poc5/render_cameras.py`, `poc/3dcg_poc5/extract_cameras.py`
-- **参考スキル**: `.claude/skills/blender-placement/SKILL.md`（構成・フォーマットの参考）
+- **参考スキル**: `.claude/skills/floor_plan_to_video_sub_placement/SKILL.md`（構成・フォーマットの参考）
 - **技術的知見**: 本メモの「最終的なアプローチ」セクション
 - **汎用化方針**: スクリプトは `sys.argv` で `work_dir` を受け取り、`bpy.data.filepath` 依存を排除
