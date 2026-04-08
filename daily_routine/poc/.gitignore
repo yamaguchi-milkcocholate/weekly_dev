@@ -8,3 +8,6 @@ keyframe_style_continuity_output/**
 3dcg_poc*/**/input/
 3dcg_poc*/**/output/
 3dcg_poc*/**/work/
+asset_image_gen*/**/input/
+asset_image_gen*/**/output/
+asset_image_gen*/**/work/
