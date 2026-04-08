@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_status
 description: 3DCGレイアウトパイプラインのマスタースキル。現在の進捗状態を自動判定し、次に実行すべきフェーズとスキルを案内する。パイプライン全体の統括、途中再開、進捗確認に使用する。レイアウトパイプラインの開始、途中再開、進捗確認、次のステップの案内に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <出力ディレクトリ>
+allowed-tools: Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_status
@@ -49,7 +50,7 @@ Phase 7: レンダリング確認
 floor_plan.svg + walls.json          → Phase 1 完了
 floor_plan_rooms.drawio              → Phase 2 完了（drawioテンプレート生成済み）
 room_info.json + floor_plan_complete.svg → Phase 3 完了
-assets.json + life_scenarios.json    → Phase 4 完了
+assets.json                          → Phase 4 完了
 scoring_criteria.json                → Phase 5 完了（任意）
 placement_plan.json                  → Phase 6 進行中
 layout_proposal.svg + layout_proposal.json → Phase 6 配置結果あり
@@ -64,7 +65,7 @@ layout_proposal.svg + layout_proposal.json → Phase 6 配置結果あり
 
 ✓ Phase 1: 間取り抽出（floor_plan.svg, walls.json）
 ✓ Phase 2-3: 空間アノテーション（room_info.json, floor_plan_complete.svg）
-✓ Phase 4: アセット準備（assets.json, life_scenarios.json）
+✓ Phase 4: アセット準備（assets.json）
 ✗ Phase 5: リファレンス調査（任意）
 ✗ Phase 6: レイアウト提案
 ✗ Phase 7: レンダリング確認
@@ -99,9 +100,9 @@ layout_proposal.svg + layout_proposal.json → Phase 6 配置結果あり
 | 1 | .blend | floor_plan.svg, walls.json, floor_plan_meta.json | なし |
 | 2 | floor_plan.svg | floor_plan_rooms.drawio | drawioで部屋・設備を記入 |
 | 3 | drawio, walls.json | room_info.json, floor_plan_complete.svg | なし |
-| 4 | complete.svg, room_info.json | assets.json, life_scenarios.json | 対話で家具情報を提供 |
+| 4 | complete.svg, room_info.json | assets.json | 対話で家具情報を提供 |
 | 5 | complete.svg, assets.json, room_info.json | scoring_criteria.json, layout_design_principles.md | 対話で重視観点を提供 |
-| 6 | complete.svg, assets.json, room_info.json, walls.json, life_scenarios.json | placement_plan.json, layout_proposal.svg, layout_proposal.json | 評価・フィードバック |
+| 6 | complete.svg, assets.json, room_info.json, walls.json | placement_plan.json, layout_proposal.svg, layout_proposal.json | 評価・フィードバック |
 | 7 | .blend, layout_proposal.json, GLB files, assets.json | レンダリング画像 | 確認 |
 
 ---

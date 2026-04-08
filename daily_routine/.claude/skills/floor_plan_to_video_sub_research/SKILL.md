@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_research
 description: 間取りタイプに応じたレイアウト事例をWeb検索で調査し、設計原則を抽出してレポートとスコアリング基準を生成する。レイアウトの参考事例調査、デザイン原則の抽出、スコアリング基準の作成に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: [出力ディレクトリ]
+allowed-tools: Bash(uv run *), Bash(mkdir *), Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_research

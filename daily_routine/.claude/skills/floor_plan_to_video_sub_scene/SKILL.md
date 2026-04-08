@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_scene
 description: 建築要素SVG（壁・柱・ドア・窓のrect要素）をBlender Pythonで読み込み、PBRマテリアル付きの3Dインテリアシーン（scene.blend）を生成する。SVGからBlender 3Dシーンへの変換、建築要素の3D化、間取りSVGから3Dモデル生成、壁・ドア・窓の3Dメッシュ化に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <input_elements_svg> <output_dir>
+allowed-tools: Bash(scripts/run_blender.sh *), Bash(mkdir *), Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_scene

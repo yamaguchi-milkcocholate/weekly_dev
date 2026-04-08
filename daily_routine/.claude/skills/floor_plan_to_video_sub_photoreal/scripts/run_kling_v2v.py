@@ -31,13 +31,25 @@ import httpx
 import jwt
 from dotenv import load_dotenv
 
+
+def _find_dotenv() -> Path | None:
+    """親ディレクトリを最大10階層さかのぼって.envを探す."""
+    d = Path(__file__).resolve().parent
+    for _ in range(10):
+        if (d / ".env").exists():
+            return d / ".env"
+        if d.parent == d:
+            break
+        d = d.parent
+    return None
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://api.klingai.com/v1"
+BASE_URL = "https://api-singapore.klingai.com/v1"
 TOKEN_EXPIRE_SECONDS = 1800
 CLOCK_SKEW_SECONDS = 5
 POLL_INTERVAL = 5
@@ -90,23 +102,30 @@ async def run_v2v(
     }
 
     payload: dict = {
-        "video_url": video_url,
+        "model_name": "kling-v3-omni",
         "prompt": prompt,
-        "video_reference_type": "base",
+        "video_list": [
+            {
+                "video_url": video_url,
+                "refer_type": "base",
+                "keep_original_sound": "no",
+            }
+        ],
         "cfg_scale": cfg_scale,
         "duration": duration,
         "aspect_ratio": aspect_ratio,
+        "mode": "pro",
     }
     if negative_prompt:
         payload["negative_prompt"] = negative_prompt
     if style_image_url:
-        payload["image_url"] = style_image_url
+        payload["image_list"] = [{"image_url": style_image_url}]
 
     start = time.time()
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(600.0)) as client:
         # V2V生成リクエスト
-        resp = await client.post(f"{BASE_URL}/videos/video2video", json=payload, headers=auth_headers)
+        resp = await client.post(f"{BASE_URL}/videos/omni-video", json=payload, headers=auth_headers)
         if resp.status_code >= 400:
             logger.error("Kling API エラー: status=%d, body=%s", resp.status_code, resp.text)
         resp.raise_for_status()
@@ -122,7 +141,7 @@ async def run_v2v(
                 token = generate_jwt(access_key, secret_key)
                 auth_headers["Authorization"] = f"Bearer {token}"
 
-            resp = await client.get(f"{BASE_URL}/videos/video2video/{task_id}", headers=auth_headers)
+            resp = await client.get(f"{BASE_URL}/videos/omni-video/{task_id}", headers=auth_headers)
             resp.raise_for_status()
             data = resp.json()["data"]
             status = data["task_status"]
@@ -142,7 +161,8 @@ async def run_v2v(
 
     # 動画ダウンロード
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{Path(payload['video_url']).stem}_photorealistic.mp4"
+    input_video_url = payload["video_list"][0]["video_url"]
+    output_path = output_dir / f"{Path(input_video_url).stem}_photorealistic.mp4"
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
         resp = await client.get(video_download_url)
         resp.raise_for_status()
@@ -155,11 +175,11 @@ async def run_v2v(
     cost_usd = duration_sec * 0.168  # Professional 1080p
     execution_log = {
         "task_id": task_id,
-        "video_url": video_url,
+        "video_url": input_video_url,
         "style_image_url": style_image_url,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
-        "video_reference_type": "base",
+        "refer_type": "base",
         "cfg_scale": cfg_scale,
         "duration": duration,
         "aspect_ratio": aspect_ratio,
@@ -175,11 +195,12 @@ async def run_v2v(
 
 
 async def main() -> None:
-    load_dotenv()
+    load_dotenv(dotenv_path=_find_dotenv())
     parser = argparse.ArgumentParser(description="Kling V3 Omni V2V フォトリアル変換")
     parser.add_argument("--video", type=Path, required=True, help="入力動画パス")
     parser.add_argument("--video-url", type=str, default=None, help="入力動画URL（GCSアップロード済みの場合）")
     parser.add_argument("--gcs-bucket", type=str, default=None, help="GCSバケット名")
+    parser.add_argument("--gcs-prefix", type=str, default="v2v", help="GCSアップロード先のprefix")
     parser.add_argument("--prompt", type=str, required=True, help="V2Vプロンプト")
     parser.add_argument("--negative-prompt", type=str, default="", help="negative prompt")
     parser.add_argument("--style-image", type=Path, default=None, help="スタイル参照画像パス")
@@ -197,7 +218,7 @@ async def main() -> None:
             raise ValueError("--video-url または --gcs-bucket が必要です")
         if not args.video.exists():
             raise FileNotFoundError(f"動画ファイルが見つかりません: {args.video}")
-        video_url = upload_to_gcs(args.video, args.gcs_bucket)
+        video_url = upload_to_gcs(args.video, args.gcs_bucket, prefix=args.gcs_prefix)
 
     # スタイル参照画像URL
     style_image_url = args.style_image_url
@@ -206,7 +227,7 @@ async def main() -> None:
             raise ValueError("スタイル画像のアップロードに --gcs-bucket が必要です")
         if not args.style_image.exists():
             raise FileNotFoundError(f"スタイル画像が見つかりません: {args.style_image}")
-        style_image_url = upload_to_gcs(args.style_image, args.gcs_bucket)
+        style_image_url = upload_to_gcs(args.style_image, args.gcs_bucket, prefix=args.gcs_prefix)
 
     await run_v2v(
         video_url=video_url,

@@ -249,7 +249,7 @@ def main():
         asset_overrides = overrides.get(asset_id, {})
 
         # GLBパス解決
-        glb_path = Path(asset_info["glb"])
+        glb_path = input_dir / asset_info["glb"]
         if not glb_path.exists():
             print(f"  Warning: GLB not found: {glb_path}")
             continue

@@ -2,7 +2,7 @@
 name: floor_plan_to_video_sub_elements
 description: クリーンSVG間取り図をPNG化し、ピクセルデータ分析で壁・柱の建築要素を個別の<rect>要素としてSVG化する。反復ループとサブエージェントレビューで品質を担保する。間取り図の要素抽出、壁rect配置、柱検出、PNG間取り図からSVG要素生成に関連するタスクで必ずこのスキルを参照すること。floor_plan_to_video_sub_traceがPNG→クリーンSVGを生成するのに対し、このスキルはSVGから建築要素を個別rect化する。
 argument-hint: [クリーンSVG] [原図PNG(省略可)] [出力ディレクトリ(省略可)]
-allowed-tools: Bash(uv run *), Bash(python3 *), Bash(magick *)
+allowed-tools: Bash(uv run *), Bash(python3 *), Bash(magick *), Bash(mkdir *), Bash(ls *), Bash(cp *)
 ---
 
 # SVG間取り図 → 要素別SVG

@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_placement
 description: layout_proposal.jsonの家具配置をGLBアセットとしてBlenderシーンに自動配置する統合スキル。GLB測定→front方向の自律判定→配置実行→配置結果の視覚的評価までを一気通貫で実行する。GLBアセットのBlender配置、家具レイアウトの3D化、scene.blendの生成に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <input_dir> <output_dir>
+allowed-tools: Bash(scripts/run_blender.sh *), Bash(uv run *), Bash(mkdir *), Bash(ls *), Bash(cp *)
 ---
 
 # floor_plan_to_video_sub_placement

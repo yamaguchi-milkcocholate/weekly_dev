@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_multiview
 description: scene.blendに配置されたカメラ位置を抽出し、各カメラからEEVEE+HDRI環境照明（Material Preview相当）で一括レンダリング画像を出力する。カメラレンダリング、カメラ位置抽出、マテリアルプレビューレンダリング、HDRI照明、シーンの多視点レンダリング、カメラアングルからの画像出力に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <input_dir> <output_dir>
+allowed-tools: Bash(scripts/run_blender.sh *), Bash(mkdir *), Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_multiview

@@ -149,7 +149,7 @@ def main():
     results = {}
     for asset in assets_data["assets"]:
         asset_id = asset["id"]
-        glb_path = Path(asset["glb"])
+        glb_path = input_dir / asset["glb"]
 
         if not glb_path.exists():
             print(f"Warning: GLB not found: {glb_path}")

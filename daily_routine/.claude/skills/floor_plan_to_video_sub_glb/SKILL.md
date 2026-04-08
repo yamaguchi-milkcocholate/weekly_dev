@@ -1,12 +1,13 @@
 ---
 name: floor_plan_to_video_sub_glb
-description: 画像からTripo AI APIで3Dモデル（GLB）を生成するスキル。単一画像・マルチビュー（最大4画角）に対応し、複数オブジェクトの並列変換を実行する。画像から3Dモデル生成、GLBファイル作成、Tripo APIでの3D変換、オブジェクトの3Dモデル化、写真から3D、マルチビュー3D生成に関連するタスクで必ずこのスキルを参照すること。
+description: 画像からTripo AI APIで3Dモデル（GLB）を生成するスキル。各オブジェクトのfront画像を使用して単一画像モードで3D変換し、複数オブジェクトを並列変換する。画像から3Dモデル生成、GLBファイル作成、Tripo APIでの3D変換、オブジェクトの3Dモデル化、写真から3Dに関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <input_dir> [--output-dir <output_dir>] [--max-concurrent <N>]
+allowed-tools: Bash(uv run *), Bash(mkdir *), Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_glb
 
-画像からTripo AI APIでGLB形式の3Dモデルを生成する。単一画像でもマルチビュー（最大4画角）でも対応し、複数オブジェクトを並列に変換できる。
+画像からTripo AI APIでGLB形式の3Dモデルを生成する。各オブジェクトのfront画像（正面）を使用して単一画像モード（`image_to_model`）で3D変換する。複数オブジェクトを並列に変換できる。
 
 ## 前提条件
 
@@ -18,31 +19,20 @@ argument-hint: <input_dir> [--output-dir <output_dir>] [--max-concurrent <N>]
 ```
 input_dir/
 ├── chair/              # オブジェクト名 = ディレクトリ名
-│   ├── front.png       # front: 正面（必須 or 唯一の画像）
-│   ├── left.jpg        # left: 左側面（任意）
-│   ├── back.png        # back: 背面（任意）
-│   └── right.webp      # right: 右側面（任意）
+│   └── front.png       # front: 正面画像（必須）
 ├── desk/
-│   └── photo.png       # 画像が1枚のみ → 単一画像モード
-└── lamp/
-    ├── front.jpg
-    └── back.jpg         # 2枚でもOK（frontは必須）
+│   └── photo.png       # 画像が1枚のみ → front扱い
+└── sofa/
+    ├── front.png       # frontが使用される（他の画像は無視）
+    ├── left.png
+    └── back.png
 ```
 
-### 画角の判定ルール
+### 画像の選択ルール
 
-ファイル名の**プレフィックス**で画角を判定する（大文字小文字不問）:
-
-| プレフィックス | 画角 | Tripo APIインデックス |
-|-------------|------|---------------------|
-| `front` | 正面 (0°) | 0 |
-| `left` | 左側面 (90°) | 1 |
-| `back` | 背面 (180°) | 2 |
-| `right` | 右側面 (270°) | 3 |
-
-- `front`プレフィックスの画像がない場合、唯一の画像をfront扱いにする
-- 画像が1枚のみ → `image_to_model`（単一画像API）
-- 画像が2枚以上（frontあり） → `multiview_to_model`（マルチビューAPI）
+- `front`プレフィックスの画像を使用する（`image_to_model` API）
+- `front`がない場合、ディレクトリ内の最初の画像をfront扱いにする
+- 複数画像があっても**常にfront 1枚のみ**で変換する
 - 対応フォーマット: PNG, JPG, JPEG, WEBP
 
 ## 実行方法

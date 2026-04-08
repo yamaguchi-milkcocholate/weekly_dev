@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_annotate
 description: SVGからdrawioテンプレートを生成し、ユーザーの手作業アノテーション後にroom_info.jsonと完成版SVGに統合する。間取り図に部屋・ドア・窓・設備・配置不可領域を定義したい、drawioでの空間アノテーション、drawioファイルからroom_info.jsonを生成したいときに使用する。drawio、部屋定義、空間アノテーション、room_info、floor_plan_completeに関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <出力ディレクトリ> [integrate]
+allowed-tools: Bash(uv run *), Bash(magick *), Bash(mkdir *), Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_annotate
@@ -80,7 +81,8 @@ drawioファイルを生成後、ユーザーに以下を案内する:
 
 - `floor_plan_rooms.drawio` — ユーザーがアノテーション済みのdrawioファイル
 - `walls.json` — 壁座標データ
-- `floor_plan_meta.json` — SVGの座標メタデータ（あれば。なければデフォルト値を使用）
+- `floor_plan_meta.json` — SVGの座標メタデータ（center_offset, scaleを使用）
+- `{stem}_elements.svg` — 建築要素SVG（viewBox取得用）
 
 ### 出力
 
@@ -110,29 +112,57 @@ COLOR_TYPE_MAP = {
 - `label`: セルのテキスト内容
 - `drawio_px`: {x, y, w, h} — drawio上のピクセル座標
 
-#### Step 3-2: 座標変換（drawio px → 実座標m）
+#### Step 3-2: 座標変換（drawio px → Blender座標m）
 
-SVGのviewBoxと表示サイズをそのまま使えるため、変換は正確:
+drawio座標 → elements SVGピクセル → Blender座標 の3段階チェーンで変換する。
+
+**重要**: `floor_plan_meta.json`のviewBox（壁BBox+MARGIN）を直接使ってはならない。drawio背景画像はクリーンSVGのviewBox全体を表示するため、MARGINを含むviewBoxとはスケールが異なり、上部ほど誤差が大きくなる。
 
 ```python
-# デフォルト値（floor_plan_meta.jsonがあればそちらを使用）
-VIEWBOX = {"x": -3, "y": -5.5, "w": 10, "h": 12}
-IMAGE_POS = {"x": 50, "y": 50, "w": 800, "h": 960}
+import re, json
 
-def drawio_to_real(drawio_x, drawio_y, drawio_w, drawio_h):
-    real_x = VIEWBOX["x"] + (drawio_x - IMAGE_POS["x"]) / IMAGE_POS["w"] * VIEWBOX["w"]
-    real_y_top = -VIEWBOX["y"] - (drawio_y - IMAGE_POS["y"]) / IMAGE_POS["h"] * VIEWBOX["h"]
-    real_w = drawio_w / IMAGE_POS["w"] * VIEWBOX["w"]
-    real_h = drawio_h / IMAGE_POS["h"] * VIEWBOX["h"]
+# 1. elements SVGのviewBox取得
+elem_svg = Path("{出力ディレクトリ}/{stem}_elements.svg").read_text()
+elem_vb = [float(x) for x in re.search(r'viewBox="([^"]+)"', elem_svg).group(1).split()]
+ELEM_W, ELEM_H = elem_vb[2], elem_vb[3]  # 例: 1306, 1725
+
+# 2. floor_plan_meta.jsonからBlender変換パラメータ取得
+meta = json.loads(Path("floor_plan_meta.json").read_text())
+SCALE = meta["scale"]  # 0.01
+COX = meta["center_offset"]["x"]
+COY = meta["center_offset"]["y"]
+
+# 3. drawioテンプレートの画像配置
+IMG_X, IMG_Y, IMG_W, IMG_H = 50, 50, 800, <テンプレート生成時のheight>
+
+def drawio_to_blender(drawio_x, drawio_y, drawio_w, drawio_h):
+    # Step 1: drawio px → elements SVG px（比例マッピング）
+    ex = (drawio_x - IMG_X) / IMG_W * ELEM_W
+    ey = (drawio_y - IMG_Y) / IMG_H * ELEM_H
+    ew = drawio_w / IMG_W * ELEM_W
+    eh = drawio_h / IMG_H * ELEM_H
+
+    # Step 2: elements SVG px → Blender座標
+    bx = ex * SCALE - COX
+    by_top = (ELEM_H - ey) * SCALE - COY  # SVG Y↓ → Blender Y↑
+    bw = ew * SCALE
+    bh = eh * SCALE
+
     return {
-        "x_min": real_x,
-        "x_max": real_x + real_w,
-        "y_min": real_y_top - real_h,  # Blender Y: 下が小さい
-        "y_max": real_y_top,
-        "width": real_w,
-        "depth": real_h,
+        "x_min": bx,
+        "x_max": bx + bw,
+        "y_min": by_top - bh,
+        "y_max": by_top,
+        "width": bw,
+        "depth": bh,
     }
 ```
+
+**変換チェーンの理由**:
+- drawio背景画像 = クリーンSVG（viewBox: 0 0 W H）
+- elements SVG = クリーンSVGを150DPIで描画したPNGに基づくrect配置
+- 両者は同じ間取り図を同比率で表示 → drawioの画像比率とelements SVGのviewBox比率は比例対応
+- Blender変換はelements SVGの座標にSCALE(0.01)と中心オフセットを適用
 
 #### Step 3-3: room_info.json のスキーマ
 
@@ -166,12 +196,10 @@ def drawio_to_real(drawio_x, drawio_y, drawio_w, drawio_h):
 
 ---
 
-## 既知の問題
+## 座標変換の注意事項
 
-### SVG画像のdrawio上での位置ずれ
+### floor_plan_meta.jsonのviewBoxを直接使ってはならない
 
-drawioにSVG画像を埋め込んだ際、画像の表示位置が期待値とずれることがある。
+`floor_plan_meta.json`の`svg_viewbox`は壁のバウンディングボックス+MARGIN(0.5m)で計算される。一方、drawio背景画像はクリーンSVGのviewBox(例: 0 0 627 828)全体を表示する。この2つはスケールが異なるため、viewBoxベースの座標変換を行うと上部ほど誤差が累積する（実測で最大1.2mのずれ）。
 
-- 症状: drawio上で壁にピッタリ配置した矩形の座標変換で誤差が発生（例: 実際1.9mが1.5mに）
-- 原因候補: drawioのSVGレンダリング時のパディングまたはスケーリングのずれ
-- 対策: drawio上の基準点を2点以上取ってアフィン変換で補正するか、ユーザーに確認
+必ず上記Step 3-2の `drawio → elements SVG → Blender` チェーンを使用すること。

@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_photoreal
 description: floor_plan_to_video_sub_cameraの出力動画をKling V3 Omni V2Vでフォトリアルなインテリア動画に変換する対話的スキル。Claudeがプロンプトを生成し、ユーザー確認後にAPI実行する。V2V動画変換、フォトリアル動画生成、Kling V2V、3Dレンダリング動画のリアル化、インテリアウォークスルー動画のフォトリアル変換に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <workdir>
+allowed-tools: Bash(uv run *), Bash(ffmpeg *), Bash(mkdir *), Bash(ls *), Bash(cp *)
 ---
 
 # floor_plan_to_video_sub_photoreal
@@ -14,8 +15,11 @@ floor_plan_to_video_sub_cameraが出力したカメラカット動画（3Dレン
 <workdir>/
 ├── input/
 │   ├── cut_*.mp4                # floor_plan_to_video_sub_cameraの出力動画（1本以上）
-│   └── style_ref.png            # （任意）ユーザー提供のスタイル参照画像
+│   └── style_ref.png            # ユーザー提供のスタイル参照画像（必須）
 └── output/
+    ├── ref_images/              # Gemini合成ref画像（カットごと）
+    │   ├── {cut_name}_ref.png
+    │   └── ...
     ├── prompt.txt               # 生成したプロンプト
     ├── negative_prompt.txt      # negative prompt
     ├── cut_*_photorealistic.mp4 # 変換後の動画
@@ -32,51 +36,90 @@ floor_plan_to_video_sub_cameraが出力したカメラカット動画（3Dレン
 ## 処理フロー
 
 ```
+Phase 0: ref画像合成（Gemini）
+    0a. 各カット動画の先頭フレームを抽出（ffmpeg）
+    0b. 先頭フレーム + style_ref.png をGeminiに入力し、構図維持のref画像を合成
+    0c. >>> ユーザー確認 <<< 合成ref画像の品質確認
+    ※ ref画像が元動画と同じ構図を持つことが重要。構図が一致しないとV2Vで構造が崩壊する
+
 Phase 1: プロンプト生成（Claude + ユーザー確認）
-    1a. 入力動画の先頭フレームを確認し、空間の特徴を把握
-    1b. スタイル参照画像があれば分析
-    1c. V2Vプロンプトを生成
-    1d. >>> ユーザー確認 <<< プロンプト・パラメータの確認・調整
+    1a. 合成ref画像を確認し、空間の特徴を把握
+    1b. V2Vプロンプトを生成
+    1c. >>> ユーザー確認 <<< プロンプト・パラメータの確認・調整
 
 Phase 2: V2V実行
-    2a. GCSアップロード（動画 + 参照画像）
-    2b. Kling V3 Omni V2V API実行
+    2a. GCSアップロード（動画 + 合成ref画像）
+    2b. Kling V3 Omni V2V API実行（--style-image に合成ref画像を指定）
     2c. ポーリング（完了待機）
     2d. 動画ダウンロード
 
 Phase 3: 品質確認
     3a. >>> ユーザー確認 <<< 出力動画の品質確認
-    3b. 問題があればPhase 1に戻ってプロンプト調整・再実行
+    3b. 問題があればPhase 0またはPhase 1に戻って調整・再実行
 ```
+
+### なぜGemini合成ref画像が必要か
+
+スタイル参照画像をそのままKling V2Vの`image_list`に渡すと、**ref画像の構図に引っ張られて元動画のカメラパス・空間構造が崩壊する**。
+各カットの先頭フレーム（3Dレンダリング）とスタイル参照画像をGeminiで合成することで、「構図が元動画と一致し、かつスタイルが適用された」ref画像を生成する。
+これにより、V2Vで構造維持 + スタイル適用の両立が可能になる。
+
+---
+
+## Phase 0: ref画像合成（Gemini）
+
+### 0a. 先頭フレーム抽出
+
+各カット動画から先頭フレームを抽出する。
+
+```bash
+# 各カットの先頭フレーム抽出
+ffmpeg -y -i <workdir>/input/cut_C1.mp4 -frames:v 1 <workdir>/output/ref_images/C1_first_frame.png
+ffmpeg -y -i <workdir>/input/cut_C2.mp4 -frames:v 1 <workdir>/output/ref_images/C2_first_frame.png
+# ...
+```
+
+### 0b. Gemini合成ref画像の生成
+
+先頭フレーム + スタイル参照画像をGeminiに入力し、構図維持のref画像を生成する。
+Claudeが先頭フレームとスタイル参照画像を確認し、カットごとに適切なプロンプトを生成して `--prompt` 引数で渡す。
+
+```bash
+uv run python <skill_dir>/scripts/generate_ref_image.py \
+  --frame <workdir>/output/ref_images/C1_first_frame.png \
+  --style-ref <workdir>/input/style_ref.png \
+  --prompt "<Claudeが生成したプロンプト>" \
+  --output <workdir>/output/ref_images/C1_ref.png
+```
+
+プロンプト生成時の観点:
+- 1枚目（3Dレンダリング）の構図・家具配置・カメラアングルを維持する指示
+- 2枚目（スタイル参照）の素材感・照明・雰囲気を適用する指示
+- カット固有の要素（窓外の景色、天井の有無、部屋タイプ等）への言及
+- 出力形式の指示（フォトリアルなインテリア写真）
+
+### 0c. ユーザー確認
+
+合成ref画像を提示し、以下を確認してもらう:
+- 元の3Dレンダリングと構図が一致しているか
+- スタイル参照画像の雰囲気が反映されているか
+- 不自然な箇所がないか
+
+品質が不十分な場合はプロンプトを調整して再生成する。
 
 ---
 
 ## Phase 1: プロンプト生成
 
-### 1a. 入力動画の確認
+### 1a. 合成ref画像の確認
 
-`<workdir>/input/` 内のMP4ファイルを特定する。先頭フレームを抽出して空間の特徴を把握する。
-
-```bash
-# 先頭フレーム抽出
-ffmpeg -i <workdir>/input/cut_*.mp4 -vframes 1 -q:v 2 <workdir>/output/preview_frame.jpg
-```
+Phase 0で生成した合成ref画像を確認し、空間の特徴を把握する。
 
 確認する観点:
 - 部屋のタイプ（リビング、寝室、キッチン等）
 - 家具の配置・種類
 - 窓の位置・サイズ
 - 天井の有無（3Dレンダリングでは天井がない場合が多い）
-
-### 1b. スタイル参照画像の分析
-
-`<workdir>/input/style_ref.png` が存在する場合、以下の観点で分析する:
-
-- 全体の雰囲気（モダン、ナチュラル、インダストリアル等）
-- 色調・カラーパレット
-- 壁・床の素材感
-- 照明の種類・色温度
-- 家具の素材感
 
 ### 1c. V2Vプロンプトの生成
 
@@ -234,22 +277,26 @@ JWT payload:
 
 ### V2V生成エンドポイント
 
-`POST https://api.klingai.com/v1/videos/video2video`
+`POST https://api-singapore.klingai.com/v1/videos/omni-video`
 
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| `video_url` | string (URI) | Yes | 入力動画URL（3-10秒、720-2160px、max 200MB） |
+| `model_name` | string | Yes | `"kling-v3-omni"` |
 | `prompt` | string | Yes | 最大2500文字。`@Video1` `@Image1` で参照可能 |
-| `video_reference_type` | enum | Yes | `base`（モーション維持、常にこれを使用） |
-| `image_url` | string (URI) | No | スタイル参照画像（min 300x300px、max 10MB） |
+| `video_list` | array | Yes | 入力動画リスト |
+| `video_list[].video_url` | string (URI) | Yes | 入力動画URL（3-10秒、720-2160px、max 200MB） |
+| `video_list[].refer_type` | enum | Yes | `"base"`（モーション維持、常にこれを使用） |
+| `video_list[].keep_original_sound` | string | No | `"no"`（デフォルト） |
+| `image_list` | array | No | スタイル参照画像リスト（`[{"image_url": "..."}]`） |
 | `cfg_scale` | float | No | 0〜1（デフォルト0.5） |
 | `negative_prompt` | string | No | 除外要素。最大2500文字 |
-| `duration` | string | No | `'3'`〜`'15'`（デフォルト`'5'`） |
-| `aspect_ratio` | string | No | `auto`, `16:9`, `9:16`, `1:1` |
+| `duration` | string | No | `"3"`〜`"15"`（デフォルト`"5"`） |
+| `aspect_ratio` | string | No | `"16:9"`, `"9:16"`, `"1:1"`（`"auto"` は400エラー） |
+| `mode` | string | No | `"pro"`（1080p） / `"standard"`（720p） |
 
 ### ステータス確認
 
-`GET https://api.klingai.com/v1/videos/video2video/{task_id}`
+`GET https://api-singapore.klingai.com/v1/videos/omni-video/{task_id}`
 
 | status | 説明 |
 |--------|------|

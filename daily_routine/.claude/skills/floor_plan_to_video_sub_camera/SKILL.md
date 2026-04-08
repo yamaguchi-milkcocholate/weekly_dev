@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_camera
 description: 任意のscene.blendからV2V入力用カメラカット動画を生成する3フェーズの対話的パイプライン。空間分析+カット設計→Cyclesレンダリング→MP4動画化を対話的にガイドする。カメラカット動画、V2V入力動画、ウォークスルー動画、カメラパス動画、Cyclesレンダリング動画、カメラアニメーション動画に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <workdir>
+allowed-tools: Bash(scripts/run_blender.sh *), Bash(uv run *), Bash(ffmpeg *), Bash(mkdir *), Bash(ls *), Bash(cp *)
 ---
 
 # floor_plan_to_video_sub_camera

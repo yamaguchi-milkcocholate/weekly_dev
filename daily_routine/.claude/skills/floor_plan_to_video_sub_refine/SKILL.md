@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_refine
 description: 家具配置のrefineループを実行する。配置方針の作成→配置エンジン実行→SVG画像評価→修正を繰り返し、最適なレイアウトを導く。家具の配置提案、レイアウト改善、配置エンジンの実行、placement_plan.jsonの作成・修正、配置評価に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: [出力ディレクトリ]
+allowed-tools: Bash(uv run *), Bash(magick *), Bash(mkdir *), Bash(ls *), Bash(cp *)
 ---
 
 # floor_plan_to_video_sub_refine
@@ -24,7 +25,6 @@ argument-hint: [出力ディレクトリ]
 - `assets.json` — 家具アセット情報
 - `room_info.json` — 部屋・配置不可の座標（エンジンとClaude Code両方が使用）
 - `walls.json` — 壁座標データ（エンジンが使用。Claude Codeは読まない）
-- `life_scenarios.json` — 生活シナリオ（Phase 5bでのみ使用）
 - `placement_engine.py` — 配置エンジン（`.claude/skills/floor_plan_to_video_sub_refine/scripts/placement_engine.py`）
 - `scoring_criteria.json` — デザインスコア基準（任意。存在すればPhase 5bで使用）
 
@@ -611,7 +611,7 @@ uv run python .claude/skills/floor_plan_to_video_sub_refine/scripts/save_iterati
 ### 終了条件
 
 - ユーザーが「この配置で良い」と承認
-- 配置エンジンがPASSかつ、生活シナリオの全チェックをクリア
+- 配置エンジンがPASS
 
 ---
 

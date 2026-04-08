@@ -2,6 +2,7 @@
 name: floor_plan_to_video_sub_render
 description: 確定した配置座標でBlenderレンダリングを実行し、3D視点で配置を確認する。layout_proposal.jsonの配置結果をBlenderで3Dレンダリングしたい、家具配置の3D確認、GLBモデルの配置可視化に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: <出力ディレクトリ>
+allowed-tools: Bash(scripts/run_blender.sh *), Bash(uv run *), Bash(mkdir *), Bash(ls *)
 ---
 
 # floor_plan_to_video_sub_render

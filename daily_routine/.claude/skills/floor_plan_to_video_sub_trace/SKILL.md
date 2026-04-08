@@ -2,7 +2,7 @@
 name: floor_plan_to_video_sub_trace
 description: カラーPNG間取り画像からクリーンなSVG間取り図を生成する。potraceによるベクタートレースと視覚的フィルタリング（不要パス除去）を統合した一気通貫スキル。間取り図のSVG化、PNG間取りからSVGへの変換、potraceトレース、間取りSVGの生成に関連するタスクで必ずこのスキルを参照すること。
 argument-hint: [間取りPNG] [出力ディレクトリ(省略可)]
-allowed-tools: Bash(uv run *), Bash(python3 *), Bash(magick *), Bash(potrace *)
+allowed-tools: Bash(uv run *), Bash(python3 *), Bash(magick *), Bash(potrace *), Bash(mkdir *), Bash(ls *), Bash(cp *), Bash(rm *), Bash(mv *)
 ---
 
 # カラーPNG → クリーンSVG間取り図

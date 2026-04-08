@@ -2,7 +2,7 @@
 name: floor_plan_to_video_sub_extract
 description: 間取りPNG画像から壁・柱の要素別SVGまでを一気通貫で生成する統合パイプライン。floor_plan_to_video_sub_trace（PNG→クリーンSVG）とfloor_plan_to_video_sub_elements（SVG→要素rect）を順次実行する。間取り図の壁rect生成、PNG間取りからSVG要素への変換、間取り画像の壁抽出を一括実行したいときに必ずこのスキルを参照すること。
 argument-hint: [workdir]
-allowed-tools: Bash(uv run *), Bash(python3 *), Bash(magick *), Bash(potrace *)
+allowed-tools: Bash(uv run *), Bash(python3 *), Bash(magick *), Bash(potrace *), Bash(mkdir *), Bash(ls *), Bash(cp *), Bash(rm *), Bash(mv *)
 ---
 
 # 間取りPNG → 要素別SVG 統合パイプライン

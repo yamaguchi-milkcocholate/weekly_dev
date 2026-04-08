@@ -1,6 +1,7 @@
 """画像からTripo AI APIで3Dモデル（GLB）を生成する。
 
-単一画像・マルチビュー（最大4画角）に対応し、複数オブジェクトを並列変換する。
+各オブジェクトのfront画像（正面）を使用して単一画像モードで3D変換する。
+複数オブジェクトを並列変換する。
 
 使い方:
     uv run python .claude/skills/floor_plan_to_video_sub_glb/scripts/image_to_3d.py input/objects/
@@ -10,12 +11,9 @@
 入力ディレクトリ構造:
     input_dir/
     ├── chair/
-    │   ├── front.png    # 正面（必須 or 唯一の画像）
-    │   ├── left.jpg     # 左側面（任意）
-    │   ├── back.png     # 背面（任意）
-    │   └── right.webp   # 右側面（任意）
+    │   └── front.png    # 正面画像（必須）
     └── desk/
-        └── photo.png    # 1枚 → 単一画像モード
+        └── photo.png    # 画像が1枚のみならそれをfront扱い
 
 環境変数:
     DAILY_ROUTINE_API_KEY_TRIPO: Tripo AIのAPIキー（tsk_で始まる）
@@ -31,7 +29,20 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+
+def _find_dotenv() -> Path | None:
+    """スクリプトの親ディレクトリを遡って.envを探す。"""
+    d = Path(__file__).resolve().parent
+    for _ in range(10):
+        if (d / ".env").exists():
+            return d / ".env"
+        if d.parent == d:
+            break
+        d = d.parent
+    return None
+
+
+load_dotenv(dotenv_path=_find_dotenv())
 
 logger = logging.getLogger(__name__)
 
@@ -145,21 +156,6 @@ async def create_single_task(client: httpx.AsyncClient, image_token: str) -> str
     return data["data"]["task_id"]
 
 
-async def create_multiview_task(client: httpx.AsyncClient, view_tokens: list[dict]) -> str:
-    """マルチビューのmultiview_to_modelタスクを作成する。"""
-    payload = {
-        "type": "multiview_to_model",
-        "files": view_tokens,
-    }
-    resp = await client.post(f"{BASE_URL}/task", json=payload)
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("code") != 0:
-        msg = f"タスク作成失敗: {data}"
-        raise RuntimeError(msg)
-    return data["data"]["task_id"]
-
-
 async def poll_task(client: httpx.AsyncClient, task_id: str, object_name: str) -> dict:
     """タスク完了までポーリングする。"""
     for i in range(MAX_POLL_COUNT):
@@ -208,38 +204,13 @@ async def process_object(
 
     async with semaphore:
         try:
-            logger.info("=== %s: 変換開始 (%d画角) ===", object_name, len(views))
+            # front画像を使用（常に単一画像モード）
+            image_path = views.get("front") or next(iter(views.values()))
+            logger.info("=== %s: 変換開始 (%s) ===", object_name, image_path.name)
 
-            if len(views) == 1:
-                # 単一画像モード
-                image_path = next(iter(views.values()))
-                token = await upload_image(client, image_path)
-                task_id = await create_single_task(client, token)
-                logger.info("[%s] 単一画像モードでタスク作成: %s", object_name, task_id)
-            else:
-                # マルチビューモード: 画角ごとにアップロードしてトークンリスト作成
-                view_tokens: list[dict] = []
-                for view_name in VIEW_ORDER:
-                    if view_name in views:
-                        image_path = views[view_name]
-                        token = await upload_image(client, image_path)
-                        ext = image_path.suffix.lstrip(".").lower()
-                        if ext == "jpeg":
-                            ext = "jpg"
-                        view_tokens.append({"type": ext, "file_token": token})
-                    else:
-                        # Tripo APIは配列インデックスで画角を判定するため、
-                        # 欠けている画角はスキップせずNoneで埋める必要があるか確認
-                        # → APIドキュメントによると、提供された画像のみで構成可能
-                        pass
-
-                task_id = await create_multiview_task(client, view_tokens)
-                logger.info(
-                    "[%s] マルチビューモードでタスク作成: %s (画角: %s)",
-                    object_name,
-                    task_id,
-                    [v for v in VIEW_ORDER if v in views],
-                )
+            token = await upload_image(client, image_path)
+            task_id = await create_single_task(client, token)
+            logger.info("[%s] タスク作成: %s", object_name, task_id)
 
             # ポーリング
             result = await poll_task(client, task_id, object_name)
