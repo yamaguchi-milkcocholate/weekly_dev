@@ -1,0 +1,124 @@
+---
+name: floor_plan_to_video_sub_assets
+description: 家具アセット情報(assets.json)を対話的に準備する。家具の仕様定義、配置ルール、ゾーニング方針の作成を行う。家具情報、アセット準備、ゾーニング方針の定義に関連するタスクで必ずこのスキルを参照すること。
+argument-hint: [出力ディレクトリ]
+allowed-tools: Bash(uv run *), Bash(ls *)
+---
+
+# floor_plan_to_video_sub_assets
+
+家具アセット情報を対話的に定義し、JSONファイルとして出力するスキル。
+
+## 前提条件
+
+- `floor_plan_complete.svg` と `room_info.json` が存在すること（部屋情報の参照に必要）
+
+## 入力
+
+- `floor_plan_complete.svg` — 間取り完成版SVG（画像として読み空間を把握）
+- `room_info.json` — 部屋・設備・配置不可領域の座標データ
+- GLBファイル群（`{workdir}/output/assets/objects/*.glb`、sub_glbの出力）
+- 参考画像（任意: `{workdir}/input/assets/*/front.png` 等）
+
+## 出力
+
+- `assets.json` — 家具アセット情報
+
+---
+
+## 実行手順
+
+### Step 1: 空間の把握
+
+`floor_plan_complete.svg`を画像として読み、以下を把握:
+- 部屋の数と名前、大まかなサイズ
+- 固定設備の位置
+- 配置不可領域の位置と理由
+
+### Step 2: 家具情報の収集
+
+ユーザーに以下を質問して家具情報を収集する:
+
+1. **家具リスト**: どんな家具を配置するか？（ベッド、デスク、テーブル等）
+2. **各家具の詳細**:
+   - サイズ（幅 × 奥行 × 高さ、メートル単位）
+   - 個数
+   - 配置先の部屋
+   - GLBファイルパス（あれば）
+
+3. **形状特徴**: 家具の向き（front/back）がある場合:
+   - front: 使用する側（椅子を引く方向、引き戸を開ける方向等）
+   - back: 壁につける側
+   - 特殊形状（半円形、L字型等）
+
+4. **配置ルール**:
+   - 壁との関係（backを壁につける、壁から離す等）
+   - 向きの制約（width方向を壁に平行等）
+   - 好ましい位置（窓際、キッチン近く等）
+
+5. **グルーピング**: ペアで配置する家具（desk+chair等）
+
+### Step 3: ゾーニング方針の定義
+
+家具を機能ゾーンに分類:
+
+```json
+{
+  "zones": [
+    {
+      "id": "work",
+      "label": "ワークエリア",
+      "assets": ["desk", "chair"],
+      "preference": "窓際、自然光"
+    }
+  ]
+}
+```
+
+典型的なゾーン分類:
+- **睡眠**: ベッド関連
+- **ワーク**: デスク・チェア
+- **ダイニング**: テーブル・食事関連
+- **収納**: クローゼット・カウンター・棚
+- **リラックス**: ソファ・テレビ台等
+
+### Step 4: JSONファイルの生成
+
+#### assets.json のスキーマ
+
+```json
+{
+  "assets": [
+    {
+      "id": "string",
+      "label": "日本語名",
+      "count": 1,
+      "size": { "width": 0.0, "depth": 0.0, "height": 0.0 },
+      "room": "配置先の部屋名",
+      "group": "グループID or null",
+      "glb": "GLBファイルパス or null",
+      "shape": {
+        "description": "形状の説明",
+        "front": "使用する側の説明",
+        "back": "壁につける側の説明"
+      },
+      "placement_rules": {
+        "wall_relation": "壁との関係",
+        "orientation": "向きの制約",
+        "preference": "好ましい位置"
+      }
+    }
+  ],
+  "groups": {
+    "group_id": {
+      "label": "グループ名",
+      "description": "グループの説明",
+      "layout": "ペア配置の方法"
+    }
+  }
+}
+```
+
+### Step 5: 確認
+
+生成したJSONをユーザーに提示し、内容を確認してもらう。修正があれば反映する。

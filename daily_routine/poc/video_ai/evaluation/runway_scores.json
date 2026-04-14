@@ -1,0 +1,95 @@
+{
+  "ai": "runway",
+  "frame_scores": [
+    {
+      "face_similarity": 10,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 10,
+      "overall_identity": 10,
+      "reasoning": "両画像は完全に同一であり、顔、髪型、服装、体型、プロポーションの全てにおいて一致しています。",
+      "frame": "frame_001.png"
+    },
+    {
+      "face_similarity": 9,
+      "hair_consistency": 10,
+      "outfit_consistency": 9,
+      "body_proportion": 10,
+      "overall_identity": 9,
+      "reasoning": "顔の特徴、髪型、服装、体型が非常に高いレベルで一致しており、同一人物として認識できる。AI生成画像はリファレンス画像を忠実に再現している。",
+      "frame": "frame_002.png"
+    },
+    {
+      "face_similarity": 6,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 8,
+      "overall_identity": 7,
+      "reasoning": "髪型と服装は非常に高い一致度を示し、体型もよく再現されています。しかし、顔のパーツや表情に明確な違いがあり、同一人物とは認識しにくい点が総合的な同一性を下げています。",
+      "frame": "frame_003.png"
+    },
+    {
+      "face_similarity": 8,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 10,
+      "overall_identity": 9,
+      "reasoning": "髪型、服装、体型は非常に高い一致度を示しています。顔の構造は似ていますが、表情や細部の特徴にわずかな違いが見られます。",
+      "frame": "frame_004.png"
+    },
+    {
+      "face_similarity": 8,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 9,
+      "overall_identity": 8,
+      "reasoning": "髪型、服装、体型は非常に高い一致度を示しています。顔の特徴も酷似していますが、AI生成画像特有のわずかな表情や肌の質感に差異が見られます。",
+      "frame": "frame_005.png"
+    },
+    {
+      "face_similarity": 8,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔の表情にわずかな違いが見られるものの、髪型、髪色、服装、体型・プロポーションは非常に高いレベルで一致しており、キャラクターの同一性がよく保たれています。",
+      "frame": "frame_006.png"
+    },
+    {
+      "face_similarity": 7,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 9,
+      "overall_identity": 8,
+      "reasoning": "髪型と服装は非常に一致しており、体型も自然です。しかし、顔の表情や細部の特徴に違いが見られるため、同一人物としての印象にわずかな差があります。",
+      "frame": "frame_007.png"
+    },
+    {
+      "face_similarity": 7,
+      "hair_consistency": 9,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 8,
+      "reasoning": "顔の表情は異なりますが、顔立ちの基本的な特徴、髪型、服装、体型は非常に高いレベルで一致しており、キャラクターの同一性は保たれています。",
+      "frame": "frame_008.png"
+    },
+    {
+      "face_similarity": 9,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔の輪郭、髪型、服装、体型が非常に高いレベルで一致しており、キャラクターの同一性が保たれています。表情にわずかな違いが見られますが、全体的な再現度は極めて高いです。",
+      "frame": "frame_009.png"
+    },
+    {
+      "face_similarity": 7,
+      "hair_consistency": 9,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 8,
+      "reasoning": "服装、髪型、体型は非常に高い一致度を示しています。顔の特徴は似ていますが、目元や口元の印象、表情が異なり、完全に同一人物とは言い切れません。",
+      "frame": "frame_010.png"
+    }
+  ]
+}

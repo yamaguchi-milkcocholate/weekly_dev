@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/archives/**)",
+      "Read(.pytest_cache/**)",
+      "Read(**/.ruff_cache/**)",
+      "Read(**/.venv/**)",
+      "Read(**/.git/**)"
+    ]
+  }
+}

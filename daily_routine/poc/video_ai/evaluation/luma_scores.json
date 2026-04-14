@@ -1,0 +1,50 @@
+{
+  "ai": "luma",
+  "frame_scores": [
+    {
+      "face_similarity": 1,
+      "hair_consistency": 1,
+      "outfit_consistency": 7,
+      "body_proportion": 1,
+      "overall_identity": 1,
+      "reasoning": "2枚目の画像では、顔、髪型、体型がほとんど見えないため、これらの観点での一致度を評価できません。服装については、白いシャツと暗い色のボトムスが確認でき、1枚目の画像と部分的に一致していますが、全体像が不明です。そのため、総合的なキャラクターの同一性は低いと判断しました。",
+      "frame": "frame_001.png"
+    },
+    {
+      "face_similarity": 8,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 8,
+      "overall_identity": 9,
+      "reasoning": "髪型と服装はリファレンス画像と非常に高い一致度を示しています。顔の特徴もよく似ていますが、角度と表情が異なるため完璧ではありません。体型も概ね一致しており、キャラクターの同一性は非常に高く保たれています。",
+      "frame": "frame_002.png"
+    },
+    {
+      "face_similarity": 8,
+      "hair_consistency": 9,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔の角度は異なるものの、顔の特徴、髪型、服装、体型が非常に高いレベルで一致しており、同一人物として認識できます。特に服装の一致度は完璧です。",
+      "frame": "frame_003.png"
+    },
+    {
+      "face_similarity": 9,
+      "hair_consistency": 10,
+      "outfit_consistency": 10,
+      "body_proportion": 9,
+      "overall_identity": 9,
+      "reasoning": "顔の特徴、髪型、髪色、服装、体型・プロポーションの全てにおいて非常に高い一致度を示しており、キャラクターの同一性が極めてよく保たれています。",
+      "frame": "frame_004.png"
+    },
+    {
+      "face_similarity": 7,
+      "hair_consistency": 9,
+      "outfit_consistency": 9,
+      "body_proportion": 8,
+      "overall_identity": 8,
+      "reasoning": "髪型と服装は非常に高い一致度を示しています。顔の特徴にはわずかな差異が見られますが、全体的なキャラクターの印象とプロポーションはよく維持されています。",
+      "frame": "frame_005.png"
+    }
+  ]
+}

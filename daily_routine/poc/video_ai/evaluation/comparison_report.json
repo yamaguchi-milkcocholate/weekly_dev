@@ -1,0 +1,138 @@
+{
+  "summary": {
+    "total_ais_evaluated": 3,
+    "ranking": [
+      {
+        "ai": "veo",
+        "mean_overall_identity": 9.5,
+        "min_overall_identity": 9,
+        "stability": 0.53,
+        "rank": 1
+      },
+      {
+        "ai": "runway",
+        "mean_overall_identity": 8.5,
+        "min_overall_identity": 7,
+        "stability": 0.85,
+        "rank": 2
+      },
+      {
+        "ai": "luma",
+        "mean_overall_identity": 7.2,
+        "min_overall_identity": 1,
+        "stability": 3.49,
+        "rank": 3
+      }
+    ]
+  },
+  "detailed_metrics": {
+    "veo": {
+      "num_frames": 8,
+      "overall_identity": {
+        "mean": 9.5,
+        "min": 9,
+        "max": 10,
+        "stdev": 0.53
+      },
+      "per_aspect": {
+        "face_similarity": {
+          "mean": 9.62,
+          "min": 9,
+          "max": 10
+        },
+        "hair_consistency": {
+          "mean": 9.75,
+          "min": 9,
+          "max": 10
+        },
+        "outfit_consistency": {
+          "mean": 9.38,
+          "min": 8,
+          "max": 10
+        },
+        "body_proportion": {
+          "mean": 9.25,
+          "min": 9,
+          "max": 10
+        },
+        "overall_identity": {
+          "mean": 9.5,
+          "min": 9,
+          "max": 10
+        }
+      }
+    },
+    "luma": {
+      "num_frames": 5,
+      "overall_identity": {
+        "mean": 7.2,
+        "min": 1,
+        "max": 9,
+        "stdev": 3.49
+      },
+      "per_aspect": {
+        "face_similarity": {
+          "mean": 6.6,
+          "min": 1,
+          "max": 9
+        },
+        "hair_consistency": {
+          "mean": 7.6,
+          "min": 1,
+          "max": 10
+        },
+        "outfit_consistency": {
+          "mean": 9,
+          "min": 7,
+          "max": 10
+        },
+        "body_proportion": {
+          "mean": 7,
+          "min": 1,
+          "max": 9
+        },
+        "overall_identity": {
+          "mean": 7.2,
+          "min": 1,
+          "max": 9
+        }
+      }
+    },
+    "runway": {
+      "num_frames": 10,
+      "overall_identity": {
+        "mean": 8.5,
+        "min": 7,
+        "max": 10,
+        "stdev": 0.85
+      },
+      "per_aspect": {
+        "face_similarity": {
+          "mean": 7.9,
+          "min": 6,
+          "max": 10
+        },
+        "hair_consistency": {
+          "mean": 9.4,
+          "min": 9,
+          "max": 10
+        },
+        "outfit_consistency": {
+          "mean": 9.5,
+          "min": 9,
+          "max": 10
+        },
+        "body_proportion": {
+          "mean": 9.2,
+          "min": 8,
+          "max": 10
+        },
+        "overall_identity": {
+          "mean": 8.5,
+          "min": 7,
+          "max": 10
+        }
+      }
+    }
+  }
+}
